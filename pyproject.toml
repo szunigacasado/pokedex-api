@@ -1,0 +1,60 @@
+[project]
+name = "pokedex-api"
+version = "0.1.0"
+description = "API REST de Pokédex personal: cliente de PokeAPI y servidor FastAPI con autenticación JWT."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "httpx>=0.28",
+  "pydantic-settings>=2.6",
+  "sqlmodel>=0.0.22",
+  "uvicorn[standard]>=0.32",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "pytest-cov>=6.0",
+  "respx>=0.22",
+  "ruff>=0.8",
+]
+
+# ─────────────────────────────────────────────────────────────
+#  Tests
+# ─────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+# ─────────────────────────────────────────────────────────────
+#  Estilo y análisis estático
+# ─────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle
+  "F",   # pyflakes
+  "I",   # orden de imports
+  "B",   # bugbear: errores habituales
+  "UP",  # sintaxis moderna de Python
+  "S",   # bandit: problemas de seguridad
+  "SIM", # simplificaciones
+  "RUF", # reglas propias de ruff
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"] # en los tests se usa assert
