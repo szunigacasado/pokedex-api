@@ -71,11 +71,24 @@ Ver [`.env.example`](.env.example): cada variable está documentada en el propio
 
 ## Ejecución
 
-_Se completa en `features/estructura-base`._
+```bash
+uv run uvicorn app.main:app --reload --no-server-header
+```
+
+- Documentación interactiva (Swagger): <http://127.0.0.1:8000/docs>
+- Estado del servicio: <http://127.0.0.1:8000/health>
+
+La aplicación no arranca si falta `SECRET_KEY` o si tiene menos de 32 caracteres. En producción tampoco arranca con la clave de ejemplo de `.env.example`.
+
+`--no-server-header` evita que las respuestas revelen qué servidor web se usa. El arranque con HTTPS en el puerto 443 se añade en `features/https-docker`.
 
 ## Testing
 
-_Se completa en `features/ci`._
+```bash
+uv run pytest --cov=app --cov-report=term-missing
+```
+
+Cada test usa una base de datos SQLite en memoria creada desde cero, así que no deja ficheros ni toca datos reales. La integración continua se añade en `features/ci`.
 
 ## Flujo de trabajo y despliegue
 
