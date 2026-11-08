@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Mínimo privilegio: el flujo solo necesita leer el código.
+permissions:
+  contents: read
+
+# Si llega un push nuevo a la misma rama o PR, se cancela la ejecución anterior.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Las acciones de terceros se fijan por SHA (y no por etiqueta, que puede moverse) para
+# evitar ataques a la cadena de suministro. Dependabot las mantiene actualizadas.
+jobs:
+  quality:
+    name: Calidad (ruff y dependencias)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Estilo y errores habituales (ruff check)
+        run: uvx ruff check --output-format=github .
+
+      - name: Formato (ruff format)
+        run: uvx ruff format --check .
+
+      - name: uv.lock coincide con pyproject.toml
+        run: uv lock --check
+
+      - name: requirements.txt coincide con uv.lock
+        run: |
+          uv export --all-groups --no-hashes --no-emit-project --format requirements.txt \
+            --no-header -o /tmp/requirements.txt
+          diff <(grep -v '^#' requirements.txt) <(grep -v '^#' /tmp/requirements.txt) \
+            || { echo "::error::requirements.txt está desactualizado: ejecuta uv export"; exit 1; }
+
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: clave-solo-para-ci-nunca-la-real-0123456789 # clave de pruebas, nunca la real
+      DATABASE_URL: sqlite:///./test.db
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar tests con cobertura
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+
+      - name: Resumen de cobertura
+        if: always()
+        run: |
+          echo "### Cobertura (Python ${{ matrix.python-version }})" >> "$GITHUB_STEP_SUMMARY"
+          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
+
+  security:
+    name: Seguridad (secretos y dependencias)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # todo el historial: un secreto borrado sigue en commits antiguos
+
+      - name: Buscar secretos en el historial (gitleaks)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Dependencias con vulnerabilidades conocidas (pip-audit)
+        run: uvx pip-audit --requirement requirements.txt --disable-pip --no-deps --progress-spinner off
