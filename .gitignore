@@ -1,0 +1,58 @@
+# ─────────────────────────────────────────────────────────────
+#  Secretos y configuración local  (NUNCA se suben)
+# ─────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# Certificados TLS locales (se generan con un script, no se versionan)
+certs/
+*.pem
+*.key
+*.crt
+
+# ─────────────────────────────────────────────────────────────
+#  Python
+# ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# ─────────────────────────────────────────────────────────────
+#  Base de datos, logs y ficheros generados
+# ─────────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.log
+logs/
+exports/
+
+# ─────────────────────────────────────────────────────────────
+#  Tests y calidad
+# ─────────────────────────────────────────────────────────────
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# ─────────────────────────────────────────────────────────────
+#  IDE y sistema operativo
+# ─────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
