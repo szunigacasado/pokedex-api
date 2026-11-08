@@ -27,7 +27,12 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
+filterwarnings = [
+  # Aviso de Starlette sobre su cliente de tests; no afecta al código de la aplicación.
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
 
 [tool.coverage.run]
 source = ["app"]
@@ -57,4 +62,7 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"] # en los tests se usa assert
+"tests/**" = [
+  "S101",         # en los tests se usa assert
+  "S105", "S106", # credenciales ficticias de prueba
+]
