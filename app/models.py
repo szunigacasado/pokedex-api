@@ -179,6 +179,103 @@ class RefreshRequest(SQLModel):
 
 
 # ═════════════════════════════════════════════════════════════
+#  Pokémon (datos de PokeAPI ya transformados)
+# ═════════════════════════════════════════════════════════════
+# PokeAPI devuelve cientos de campos por Pokémon (movimientos, juegos, objetos...). El
+# cliente extrae solo lo que usa la API y lo entrega con estos modelos, de modo que el
+# resto del código no depende del formato de la API externa.
+class NamedResource(SQLModel):
+    id: int
+    name: str
+
+
+class PokemonStats(SQLModel):
+    hp: int
+    attack: int
+    defense: int
+    special_attack: int
+    special_defense: int
+    speed: int
+
+    @property
+    def total(self) -> int:
+        return (
+            self.hp
+            + self.attack
+            + self.defense
+            + self.special_attack
+            + self.special_defense
+            + self.speed
+        )
+
+
+class PokemonSprites(SQLModel):
+    front_default: str | None = None
+    front_shiny: str | None = None
+    official_artwork: str | None = None
+
+
+class PokemonAbility(SQLModel):
+    name: str
+    is_hidden: bool = False
+
+
+class PokemonSummary(SQLModel):
+    """Versión reducida para listados: ``{id, name, sprite, types}``."""
+
+    id: int
+    name: str
+    sprite: str | None
+    types: list[str]
+
+
+class PokemonDetail(SQLModel):
+    id: int
+    name: str
+    height: int = Field(description="Altura en decímetros.")
+    weight: int = Field(description="Peso en hectogramos.")
+    base_experience: int | None = None
+    types: list[str]
+    abilities: list[PokemonAbility]
+    stats: PokemonStats
+    sprites: PokemonSprites
+
+    def to_summary(self) -> PokemonSummary:
+        return PokemonSummary(
+            id=self.id,
+            name=self.name,
+            sprite=self.sprites.front_default or self.sprites.official_artwork,
+            types=self.types,
+        )
+
+
+class PokemonSpecies(SQLModel):
+    id: int
+    name: str
+    display_name: str = Field(description="Nombre en español si existe.")
+    genus: str | None = Field(default=None, description="Categoría, p. ej. «Pokémon Ratón».")
+    description: str | None = Field(default=None, description="Entrada de la Pokédex.")
+    generation: str | None = None
+    is_legendary: bool = False
+    is_mythical: bool = False
+    evolution_chain_id: int | None = None
+
+
+class PokemonPage(SQLModel):
+    count: int
+    limit: int
+    offset: int
+    results: list[NamedResource]
+
+
+class PokemonSearchResult(SQLModel):
+    count: int
+    limit: int
+    offset: int
+    results: list[PokemonSummary]
+
+
+# ═════════════════════════════════════════════════════════════
 #  Pokédex
 # ═════════════════════════════════════════════════════════════
 class PokedexEntryBase(SQLModel):
