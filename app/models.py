@@ -394,6 +394,55 @@ class PokedexEntryUpdate(SQLModel):
         return _not_in_future(value)
 
 
+class EvolutionStep(SQLModel):
+    """Una especie dentro de su cadena evolutiva."""
+
+    id: int
+    name: str
+    stage: int = Field(description="1 = forma base, 2 = primera evolución...")
+    evolves_from: str | None = None
+    condition: str | None = Field(
+        default=None, description="Cómo se llega a esta especie, p. ej. «nivel 16»."
+    )
+
+
+class EvolutionChain(SQLModel):
+    id: int
+    stages: int = Field(description="Número de etapas de la cadena.")
+    steps: list[EvolutionStep] = Field(description="Todas las especies, en orden de etapa.")
+
+
+class EvolutionTarget(SQLModel):
+    id: int
+    name: str
+    condition: str | None
+
+
+class EntryEvolution(SQLModel):
+    """Posición de un Pokémon de la Pokédex dentro de su cadena evolutiva."""
+
+    chain_id: int
+    stage: int
+    total_stages: int
+    evolves_from: str | None
+    evolves_to: list[EvolutionTarget]
+    is_final_stage: bool
+
+
+class PokedexEntryV2(PokedexEntryRead):
+    evolution: EntryEvolution | None = Field(
+        description="null si PokeAPI no está disponible o la especie no tiene cadena."
+    )
+
+
+class PokedexCursorPage(SQLModel):
+    items: list[PokedexEntryV2]
+    limit: int
+    next_cursor: str | None = Field(
+        description="Pásalo como `cursor` para pedir la página siguiente; null si no hay más."
+    )
+
+
 class PokedexStats(SQLModel):
     """Estadísticas de la Pokédex. Los seis primeros campos son los del enunciado."""
 
