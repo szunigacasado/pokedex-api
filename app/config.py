@@ -68,6 +68,22 @@ class Settings(BaseSettings):
     max_failed_logins: int = Field(default=5, ge=1, le=20)
     lockout_minutes: int = Field(default=15, ge=1, le=24 * 60)
 
+    # ── Inicio de sesión con Google (OpenID Connect) ─────────
+    # Sin GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET, el login con Google responde 503 y el
+    # resto de la API funciona igual.
+    google_client_id: str | None = None
+    google_client_secret: SecretStr | None = None
+    google_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/callback"
+    oauth_success_redirect: str | None = Field(
+        default=None,
+        description="Si se indica, tras el login se redirige aquí con los tokens en el "
+        "fragmento (#access_token=...); si no, el callback devuelve los tokens en JSON.",
+    )
+
+    @property
+    def google_enabled(self) -> bool:
+        return bool(self.google_client_id and self.google_client_secret)
+
     # ── Cliente de PokeAPI ───────────────────────────────────
     pokeapi_base_url: str = "https://pokeapi.co/api/v2"
     pokeapi_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
