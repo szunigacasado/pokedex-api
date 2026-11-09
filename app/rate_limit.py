@@ -48,6 +48,7 @@ TOKEN = _setting("rate_limit_token")  # 30/minute: refresh y logout
 EXTERNAL = _setting("rate_limit_external")  # 30/minute: cada petición llama a PokeAPI
 EXPORT = _setting("rate_limit_export")  # 10/minute: generar PDF consume CPU
 DEFAULT = _setting("rate_limit_default")  # 100/minute: resto de endpoints autenticados
+AI = _setting("rate_limit_ai")  # 10/minute: cada petición puede consumir cuota de Groq
 
 _settings = get_settings()
 limiter = Limiter(
