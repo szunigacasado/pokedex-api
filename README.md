@@ -409,6 +409,45 @@ _Resumen; el detalle completo irá en `SECURITY.md`._
 | `Cache-Control: no-store` en las respuestas con tokens | Ningún proxy ni navegador guarda los tokens en caché. |
 | Rehash automático al iniciar sesión | Si se sube el coste de bcrypt, las contraseñas antiguas se actualizan solas. |
 
+### Cadena de middlewares
+
+Cada petición atraviesa, de fuera hacia dentro:
+
+```
+RequestLogging → SecurityHeaders → TrustedHost → BodySizeLimit → CORS → rutas
+```
+
+| Middleware | Qué hace | Por qué en ese orden |
+|---|---|---|
+| **RequestLogging** | Registra la petición, asigna `X-Request-ID` y convierte cualquier error no controlado en un `500` genérico. | Es el más externo: mide la duración total y ve todos los rechazos de los demás. |
+| **SecurityHeaders** | Añade las cabeceras de seguridad a **todas** las respuestas y elimina cualquier `Server` o `X-Powered-By`. | Va antes de los que rechazan, para que sus `400` y `413` también lleven las cabeceras. |
+| **TrustedHost** | Rechaza (`400`) los `Host` que no están en `ALLOWED_HOSTS`. | Frena el *Host header injection* y el *DNS rebinding* antes de procesar nada. |
+| **BodySizeLimit** | Rechaza (`413`) los cuerpos de más de 1 MB **sin cargarlos en memoria**, también con `Transfer-Encoding: chunked`. | Protege la memoria antes de que FastAPI lea y valide el JSON. |
+| **CORS** | Orígenes, métodos y cabeceras permitidos. | Justo antes de las rutas, como recomienda Starlette. |
+
+Todos son **ASGI puros**: no copian las respuestas ni rompen el *streaming*.
+
+| Cabecera | Valor | Protege de |
+|---|---|---|
+| `Content-Security-Policy` | API: `default-src 'none'; frame-ancestors 'none'…` | Ejecución de contenido inyectado y *clickjacking*. |
+| `X-Content-Type-Options` | `nosniff` | Que el navegador interprete un JSON como HTML o script. |
+| `X-Frame-Options` | `DENY` | *Clickjacking* en navegadores antiguos. |
+| `Referrer-Policy` | `no-referrer` | Filtrar URLs a otros sitios. |
+| `Permissions-Policy` | cámara, micrófono, ubicación y pagos desactivados | Abuso de APIs del navegador. |
+| `Cross-Origin-Opener/Resource-Policy` | `same-origin` | Ataques entre pestañas y lectura desde otros orígenes. |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains`, **solo por HTTPS** | Rebajar la conexión a HTTP. |
+| `Cache-Control` | `no-store` por defecto | Que proxies o navegadores guarden datos personales o tokens. |
+
+**Documentación sin pistas.** La página `/docs` de FastAPI por defecto carga su icono desde `fastapi.tiangolo.com`, lo que delata la tecnología. También pide Swagger a un CDN con una versión flotante y lo arranca con un *script* en línea. La página propia ([`app/docs.py`](app/docs.py)) cambia eso:
+- Usa un icono propio.
+- Fija Swagger UI **5.34.1** con hashes **SRI** (*Subresource Integrity*): si el CDN sirviera un archivo alterado, el navegador no lo ejecutaría.
+- Arranca Swagger desde `/static/swagger-init.js`, así que la CSP de `/docs` no permite *scripts* en línea.
+- Con `persistAuthorization: false`, el token no queda guardado en el navegador.
+- ReDoc no se publica.
+- `/docs` y `/openapi.json` se pueden desactivar con `DOCS_ENABLED=false`.
+
+El servidor web no se anuncia: uvicorn se arranca con `--no-server-header` y, por si acaso, el middleware elimina cualquier cabecera `Server`.
+
 ### Vulnerabilidades conocidas en dependencias
 
 `pip-audit` señala dos avisos que **no afectan** a esta API. Se ignoran en la CI de forma explícita y justificada:

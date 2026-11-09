@@ -16,6 +16,8 @@ os.environ.setdefault("DATABASE_URL", "sqlite://")
 os.environ.setdefault("BCRYPT_ROUNDS", "4")
 # Los tests no escriben el fichero de log; hay un test específico que lo comprueba.
 os.environ.setdefault("LOG_FILE", "")
+# TestClient envía Host: testserver
+os.environ.setdefault("ALLOWED_HOSTS", "testserver,localhost,127.0.0.1")
 
 from collections.abc import Iterator
 
