@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, status
+from fastapi import APIRouter, Depends, FastAPI, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -19,6 +19,7 @@ from sqlmodel import Session
 
 from app.config import get_settings
 from app.database import create_db_and_tables, get_session
+from app.routers import auth
 
 logger = logging.getLogger("pokedex_api")
 
@@ -72,6 +73,10 @@ def create_app() -> FastAPI:
                 content=HealthStatus(status="degraded", database="unavailable").model_dump(),
             )
         return HealthStatus(status="ok", database="ok")
+
+    api_v1 = APIRouter(prefix="/api/v1")
+    api_v1.include_router(auth.router)
+    app.include_router(api_v1)
 
     return app
 
