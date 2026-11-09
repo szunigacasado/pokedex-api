@@ -26,6 +26,13 @@ from sqlmodel import Session, SQLModel
 from app import models as _models  # noqa: F401  (registra las tablas en los metadatos)
 from app.database import build_engine, get_session
 from app.main import app
+from app.rate_limit import limiter
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits() -> None:
+    """Cada test empieza con los contadores de rate limiting a cero."""
+    limiter.reset()
 
 
 @pytest.fixture
