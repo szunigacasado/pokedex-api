@@ -9,6 +9,7 @@ import logging
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Annotated, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, HTTPException, Path, Query, Response, status
 from sqlalchemy import func, nulls_last
@@ -23,10 +24,12 @@ from app.models import (
     PokedexEntryRead,
     PokedexEntryUpdate,
     PokedexPage,
+    PokedexStats,
     User,
     utc_now,
 )
 from app.services.exporters import pokedex_to_csv, pokedex_to_pdf
+from app.services.stats import summarize
 
 logger = logging.getLogger("pokedex_api.pokedex")
 
@@ -209,6 +212,67 @@ async def export_entries(
             "Content-Disposition": f'attachment; filename="{filename}"',
             "Cache-Control": "no-store",
         },
+    )
+
+
+# ═════════════════════════════════════════════════════════════
+#  Estadísticas (también antes que /{entry_id})
+# ═════════════════════════════════════════════════════════════
+def _parse_timezone(name: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Zona horaria no válida. Usa un nombre IANA, por ejemplo Europe/Madrid.",
+        ) from None
+
+
+@router.get("/stats", response_model=PokedexStats, summary="Estadísticas de mi Pokédex")
+async def pokedex_stats(
+    user: CurrentUser,
+    session: SessionDep,
+    pokeapi: PokeAPIDep,
+    tz: Annotated[
+        str,
+        Query(
+            max_length=64,
+            description="Zona horaria IANA para decidir dónde empieza cada día de la racha.",
+            examples=["Europe/Madrid"],
+        ),
+    ] = "UTC",
+) -> PokedexStats:
+    """Resumen de la Pokédex del usuario.
+
+    - `completion_percentage`: porcentaje de los Pokémon de la Pokédex que están
+      capturados, como en el ejemplo del enunciado (89 de 150 → 59,3).
+    - `capture_streak_days`: días consecutivos con al menos una captura hasta hoy. Si hoy
+      aún no hay capturas pero ayer sí, la racha sigue viva.
+    - `national_dex_percentage`: capturados respecto al total de especies que existen
+      según PokeAPI. Es el único dato que depende de PokeAPI; si no responde, es `null`.
+
+    Los días se cuentan en la zona horaria `tz`: una captura a las 23:30 UTC es «mañana»
+    en Madrid.
+    """
+    zone = _parse_timezone(tz)
+    entries = list(session.exec(select(PokedexEntry).where(PokedexEntry.owner_id == user.id)).all())
+    summary = summarize(entries, zone, utc_now())
+    national = await pokeapi.get_species_count()
+
+    return PokedexStats(
+        total_pokemon=summary.total,
+        captured=summary.captured,
+        favorites=summary.favorites,
+        completion_percentage=summary.completion_percentage,
+        most_common_type=summary.most_common_type,
+        capture_streak_days=summary.streaks.current,
+        longest_streak_days=summary.streaks.longest,
+        type_distribution=summary.type_distribution,
+        first_capture_date=summary.first_capture,
+        last_capture_date=summary.last_capture,
+        national_dex_total=national,
+        national_dex_percentage=round(100 * summary.captured / national, 1) if national else None,
+        timezone=tz,
     )
 
 

@@ -472,6 +472,18 @@ class PokeAPIService:
             for p in data.get("pokemon", [])
         ]
 
+    async def get_species_count(self) -> int | None:
+        """Número de especies de la Pokédex Nacional. Cambia muy pocas veces (con cada
+        juego nuevo), así que se cachea un día. ``None`` si PokeAPI no responde."""
+        try:
+            data = await self._get_json(
+                "/pokemon-species", "Especies", "total", params={"limit": 1}, ttl=INDEX_TTL_SECONDS
+            )
+        except PokeAPIError:
+            return None
+        count = data.get("count")
+        return count if isinstance(count, int) and count > 0 else None
+
     async def get_ability_names(self, names: list[str]) -> dict[str, str]:
         """Traduce nombres de habilidad (``static``) a su nombre en español.
 

@@ -201,6 +201,37 @@ curl -X POST http://127.0.0.1:8000/api/v1/pokedex \
 - **Textos limpios:** se quitan los espacios sobrantes y un apodo o una nota vacíos se guardan como `null`.
 - **Datos copiados de PokeAPI:** la Pokédex, sus filtros y sus estadísticas funcionan aunque PokeAPI se caiga.
 
+#### Estadísticas: `GET /api/v1/pokedex/stats?tz=Europe/Madrid` 🔒
+
+```json
+{
+  "total_pokemon": 9,
+  "captured": 8,
+  "favorites": 2,
+  "completion_percentage": 88.9,
+  "most_common_type": "fire",
+  "capture_streak_days": 1,
+  "longest_streak_days": 1,
+  "type_distribution": {"fire": 2, "normal": 2, "poison": 2, "electric": 1, "...": 1},
+  "first_capture_date": "2026-10-01T10:00:00Z",
+  "last_capture_date": "2026-11-09T11:58:19Z",
+  "national_dex_total": 1025,
+  "national_dex_percentage": 0.8,
+  "timezone": "Europe/Madrid"
+}
+```
+
+Los seis primeros campos son exactamente los del enunciado. Cómo se calcula cada dato:
+
+| Campo | Definición |
+|---|---|
+| `completion_percentage` | Capturados respecto al total de la Pokédex, con 1 decimal. Es la definición del ejemplo del enunciado (89 de 150 → 59,3). |
+| `most_common_type` | Tipo más repetido entre los Pokémon guardados. En caso de empate gana el primero alfabéticamente, para que el resultado sea siempre el mismo. |
+| `capture_streak_days` | Días **consecutivos** con al menos una captura hasta hoy. Si hoy aún no hay capturas pero ayer sí, la racha sigue viva; si la última fue anteayer, vale 0. |
+| `national_dex_percentage` | Capturados respecto a todas las especies existentes según PokeAPI (dato cacheado 24 h). Es lo único que depende de PokeAPI: si no responde, vale `null` y el resto sigue funcionando. |
+
+Las rachas dependen de **dónde empieza cada día**: una captura a las 23:30 UTC ya es «mañana» en Madrid. Por eso el parámetro `tz` acepta cualquier zona horaria IANA (por defecto `UTC`). En Windows, que no incluye la base de datos de zonas horarias, se usa el paquete `tzdata`.
+
 **Exportación:**
 - **CSV:** estándar RFC 4180, en UTF-8 con BOM para que Excel muestre los acentos. Está protegido contra la **inyección de fórmulas**: un apodo como `=HYPERLINK(...)` se guarda como texto.
 - **PDF:** con ReportLab. Incluye un resumen (total, capturados, favoritos), una tabla con el sprite de cada Pokémon, los tipos en su color, la cabecera repetida en cada página y la paginación.
