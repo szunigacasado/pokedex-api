@@ -1,0 +1,29 @@
+version: 2
+
+# Las actualizaciones van a `develop`, nunca directamente a `main`: siguen el mismo
+# flujo de pull request y CI que cualquier otro cambio.
+updates:
+  - package-ecosystem: uv
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      dependencias:
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope

@@ -1,5 +1,7 @@
 # Pokédex API
 
+![CI](https://github.com/szunigacasado/pokedex-api/actions/workflows/ci.yml/badge.svg)
+
 API REST para que cada entrenador gestione su **Pokédex personal**: busca Pokémon en la [PokeAPI](https://pokeapi.co/) pública, los guarda en su colección, los marca como capturados, consulta estadísticas y monta equipos de batalla de hasta seis Pokémon.
 
 Práctica 1 del Módulo 2 (APIs REST y fundamentos de integración) de **Sistemas de Información**, Universidad Francisco de Vitoria.
@@ -88,7 +90,25 @@ La aplicación no arranca si falta `SECRET_KEY` o si tiene menos de 32 caractere
 uv run pytest --cov=app --cov-report=term-missing
 ```
 
-Cada test usa una base de datos SQLite en memoria creada desde cero, así que no deja ficheros ni toca datos reales. La integración continua se añade en `features/ci`.
+Cada test usa una base de datos SQLite en memoria creada desde cero, así que no deja ficheros ni toca datos reales.
+
+### Integración continua
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) se ejecuta en cada *push* a `main` o `develop` y en cada *pull request*. Un PR con la CI en rojo no se integra.
+
+| Trabajo | Qué comprueba |
+|---|---|
+| **Calidad** | `ruff check` y `ruff format --check`; que `uv.lock` coincide con `pyproject.toml` y que `requirements.txt` coincide con `uv.lock`. |
+| **Tests** | Instala desde `requirements.txt` y ejecuta `pytest --cov=app --cov-fail-under=80` en Python 3.12 y 3.13. La cobertura aparece en el resumen de la ejecución. |
+| **Seguridad** | `gitleaks` busca secretos en **todo el historial** y `pip-audit` busca vulnerabilidades conocidas en las dependencias. |
+
+Medidas de seguridad del propio flujo:
+
+- Permisos de solo lectura.
+- Acciones de terceros fijadas por SHA, para que una etiqueta movida no pueda inyectar código.
+- Clave de pruebas propia de la CI, nunca la real.
+
+[Dependabot](.github/dependabot.yml) propone cada semana actualizaciones de dependencias y de acciones, siempre como PR contra `develop`.
 
 ## Flujo de trabajo y despliegue
 
