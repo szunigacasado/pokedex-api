@@ -534,6 +534,12 @@ class PokeAPIService:
         self.cache.set(f"img:{url}", response.content, self._settings.pokeapi_cache_ttl_seconds)
         return response.content
 
+    async def get_images(self, urls: list[str | None]) -> dict[str, bytes]:
+        """Descarga varias imágenes en paralelo (sin repetir URLs) y devuelve las obtenidas."""
+        unique = list(dict.fromkeys(u for u in urls if u))
+        images = await asyncio.gather(*(self.get_image(u) for u in unique))
+        return {url: image for url, image in zip(unique, images, strict=True) if image}
+
     async def _name_index(self) -> list[NamedResource]:
         """Índice completo de nombres. PokeAPI no tiene búsqueda por texto, así que se
         descarga la lista de nombres una vez al día y se filtra en local."""
