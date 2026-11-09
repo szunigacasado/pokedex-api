@@ -22,6 +22,8 @@ from sqlmodel import Session
 from app.config import get_settings
 from app.database import create_db_and_tables, get_session
 from app.errors import register_exception_handlers
+from app.logging_config import configure_logging
+from app.middleware import RequestLoggingMiddleware
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.routers import auth, pokedex, pokemon, teams
 from app.services.pokeapi_service import PokeAPIService
@@ -43,20 +45,25 @@ class HealthStatus(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    settings = get_settings()
     create_db_and_tables()
     logger.info("Base de datos inicializada")
 
     # Un único cliente HTTP para toda la aplicación: reutiliza conexiones (keep-alive)
     # y comparte caché y circuit breaker entre peticiones.
     app.state.pokeapi = PokeAPIService()
+    # No se registran versiones, rutas del sistema ni secretos: solo el entorno.
+    logger.info("Aplicación iniciada (entorno: %s)", settings.environment)
     try:
         yield
     finally:
         await app.state.pokeapi.close()
+        logger.info("Aplicación detenida")
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging(settings)
 
     app = FastAPI(
         title=settings.app_name,
@@ -110,6 +117,10 @@ def create_app() -> FastAPI:
         ],
         max_age=settings.cors_max_age_seconds,
     )
+    # El último middleware añadido es el más externo: el registro de peticiones envuelve
+    # a todos los demás, así que mide la duración completa y ve también los rechazos de
+    # CORS y los errores no controlados.
+    app.add_middleware(RequestLoggingMiddleware)
 
     api_v1 = APIRouter(prefix="/api/v1")
     api_v1.include_router(auth.router)
