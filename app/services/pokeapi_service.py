@@ -59,6 +59,12 @@ MAX_PAGE_SIZE: Final = 100
 NOT_FOUND_TTL_SECONDS: Final = 300
 INDEX_TTL_SECONDS: Final = 24 * 3600
 MAX_RETRY_AFTER_SECONDS: Final = 10.0
+MAX_IMAGE_BYTES: Final = 2 * 1024 * 1024
+
+# Las imágenes solo se descargan de los repositorios de sprites de PokeAPI. Sin esta
+# lista, una URL manipulada podría hacer que el servidor pidiera recursos internos (SSRF).
+ALLOWED_IMAGE_HOSTS: Final = frozenset({"raw.githubusercontent.com"})
+ALLOWED_IMAGE_PATH_PREFIX: Final = "/PokeAPI/sprites/"
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z0-9][a-z0-9-]{0,49}$")
 _TYPE_PATTERN: Final = re.compile(r"^[a-z][a-z-]{1,19}$")
@@ -182,6 +188,7 @@ def to_pokemon_detail(data: dict[str, Any]) -> PokemonDetail:
     return PokemonDetail(
         id=data["id"],
         name=data["name"],
+        species_name=(data.get("species") or {}).get("name"),
         height=data.get("height") or 0,
         weight=data.get("weight") or 0,
         base_experience=data.get("base_experience"),
@@ -464,6 +471,68 @@ class PokeAPIService:
             NamedResource(id=_id_from_url(p["pokemon"]["url"]), name=p["pokemon"]["name"])
             for p in data.get("pokemon", [])
         ]
+
+    async def get_ability_names(self, names: list[str]) -> dict[str, str]:
+        """Traduce nombres de habilidad (``static``) a su nombre en español.
+
+        Es un dato decorativo: si una consulta falla, esa habilidad se queda sin traducir.
+        """
+
+        async def translate(name: str) -> tuple[str, str | None]:
+            try:
+                key = normalize_identifier(name)
+                data = await self._get_json(f"/ability/{key}", "Habilidad", key)
+            except PokeAPIError:
+                return name, None
+            return name, _pick_language(data.get("names", []), "name")
+
+        results = await asyncio.gather(*(translate(n) for n in names))
+        return {name: label for name, label in results if label}
+
+    async def get_image(self, url: str | None) -> bytes | None:
+        """Descarga un sprite de PokeAPI. Devuelve ``None`` si no se puede obtener.
+
+        Solo acepta HTTPS hacia los repositorios de sprites de PokeAPI y como mucho 2 MB.
+        Un fallo aquí no es grave: la ficha se dibuja igualmente sin imagen.
+        """
+        if not url:
+            return None
+        parsed = httpx.URL(url)
+        if (
+            parsed.scheme != "https"
+            or parsed.host not in ALLOWED_IMAGE_HOSTS
+            or not parsed.path.startswith(ALLOWED_IMAGE_PATH_PREFIX)
+        ):
+            logger.warning("Imagen rechazada por no estar en la lista permitida: %s", url)
+            return None
+
+        cached = self.cache.get(f"img:{url}")
+        if cached is not None:
+            return cached
+
+        started = time.perf_counter()
+        try:
+            async with self._semaphore:
+                response = await self._client.get(url)
+        except httpx.HTTPError as exc:
+            logger.warning("Imagen GET %s -> %s", url, exc.__class__.__name__)
+            return None
+
+        logger.info(
+            "Imagen GET %s -> %d (%.0f ms)",
+            url,
+            response.status_code,
+            (time.perf_counter() - started) * 1000,
+        )
+        content_type = response.headers.get("content-type", "")
+        if (
+            response.status_code != 200
+            or not content_type.startswith("image/")
+            or len(response.content) > MAX_IMAGE_BYTES
+        ):
+            return None
+        self.cache.set(f"img:{url}", response.content, self._settings.pokeapi_cache_ttl_seconds)
+        return response.content
 
     async def _name_index(self) -> list[NamedResource]:
         """Índice completo de nombres. PokeAPI no tiene búsqueda por texto, así que se

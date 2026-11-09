@@ -55,6 +55,8 @@ packaging==26.3
     # via pytest
 passlib==1.7.4
     # via pokedex-api
+pillow==13.0.0
+    # via pokedex-api
 pluggy==1.7.0
     # via
     #   pytest

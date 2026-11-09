@@ -19,7 +19,8 @@ from sqlmodel import Session
 
 from app.config import get_settings
 from app.database import create_db_and_tables, get_session
-from app.routers import auth
+from app.errors import register_exception_handlers
+from app.routers import auth, pokemon
 from app.services.pokeapi_service import PokeAPIService
 
 logger = logging.getLogger("pokedex_api")
@@ -82,8 +83,11 @@ def create_app() -> FastAPI:
             )
         return HealthStatus(status="ok", database="ok")
 
+    register_exception_handlers(app)
+
     api_v1 = APIRouter(prefix="/api/v1")
     api_v1.include_router(auth.router)
+    api_v1.include_router(pokemon.router)
     app.include_router(api_v1)
 
     return app
