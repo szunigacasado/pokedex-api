@@ -474,7 +474,10 @@ TypeName = Literal[
 StatName = Literal["hp", "attack", "defense", "special_attack", "special_defense", "speed"]
 AiSource = Literal["ai", "rules"]
 
-_Line = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=240)]
+ADVICE_LINE_MAX_LENGTH = 240
+_Line = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=ADVICE_LINE_MAX_LENGTH)
+]
 
 
 class OakAdvice(SQLModel):

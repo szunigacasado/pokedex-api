@@ -23,11 +23,13 @@ from app.models import (
     PokemonStats,
 )
 from app.services.ai_oak import (
+    _team_facts,
     explain_query,
     resisting_types,
     rules_advice,
     rules_query,
     run_query,
+    super_effective_attackers,
 )
 from app.services.team_analysis import analyze_team
 from tests.fakes import POKEAPI, pokemon_payload, with_real_sprites
@@ -179,6 +181,25 @@ def test_any_ai_failure_falls_back_to_rules(
 
     assert response.status_code == 200
     assert response.json()["source"] == "rules"
+
+
+def test_overlong_ai_lists_are_trimmed_instead_of_discarded(
+    client: TestClient, auth_headers: dict, api, fire_team: int, ai_enabled
+) -> None:
+    """Si el modelo se extiende, se aprovecha lo que cumple: listas recortadas a 4, líneas
+    demasiado largas fuera y, si una lista se queda vacía, se completa con las reglas."""
+    verbose = GOOD_ADVICE | {
+        "strengths": [f"Punto {i}." for i in range(1, 7)],
+        "weaknesses": ["x" * 300],
+    }
+    api.post(GROQ).mock(return_value=groq_reply(verbose))
+
+    body = client.get(advice_url(fire_team), headers=auth_headers).json()
+
+    assert body["source"] == "ai"
+    assert body["strengths"] == ["Punto 1.", "Punto 2.", "Punto 3.", "Punto 4."]
+    assert body["weaknesses"]
+    assert all(len(line) <= 240 for line in body["weaknesses"])
 
 
 def test_ai_answers_are_cached(
@@ -341,6 +362,45 @@ def test_rules_advice_suggests_resisting_types() -> None:
 
     assert any(s.startswith("Contra Agua, añade un Pokémon de tipo") for s in advice.suggestions)
     assert all(len(lst) <= 4 for lst in (advice.strengths, advice.weaknesses, advice.suggestions))
+
+
+def test_super_effective_attackers() -> None:
+    assert set(super_effective_attackers("grass")) == {"fire", "ice", "poison", "flying", "bug"}
+
+
+def test_team_facts_give_the_model_precomputed_type_relations() -> None:
+    """El modelo recibe ya calculado de qué es débil cada miembro y cómo cubrirlo, para
+    que no confunda atacar con recibir ni atribuya debilidades inexistentes."""
+    analysis = analyze_team(
+        1, "Mixto", [detail(1, ["fire", "flying"], 100), detail(2, ["water"], 80)]
+    )
+
+    facts = _team_facts(analysis)
+
+    charizard, squirtle = facts["miembros"]
+    assert "Tierra" not in charizard["debil_a"]  # volador: inmune a Tierra
+    assert {"Roca", "Agua", "Eléctrico"} <= set(charizard["debil_a"])
+    assert set(squirtle["debil_a"]) == {"Planta", "Eléctrico"}
+    recs = facts["recomendaciones"]
+    assert 1 <= len(recs) <= 4
+    assert recs[0]["objetivo"].startswith("cubrir la debilidad a ")
+    for rec in recs:
+        if rec["objetivo"].startswith("cubrir la debilidad a "):
+            assert rec["anade_un_pokemon_de_tipo"]
+        else:
+            assert rec["objetivo"].startswith("poder golpear con daño doble a ")
+            assert rec["ensena_ataques_de_tipo"]
+    assert any("ensena_ataques_de_tipo" in rec for rec in recs)
+
+
+def test_rules_advice_names_attack_types_for_missing_coverage() -> None:
+    analysis = analyze_team(1, "Normal", [detail(1, ["normal"], 80)])
+
+    advice = rules_advice(analysis)
+
+    assert any(
+        s.startswith("Para golpear a ") and "ataques de tipo" in s for s in advice.suggestions
+    )
 
 
 def test_rules_advice_for_an_empty_team() -> None:
