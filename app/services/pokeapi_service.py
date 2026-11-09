@@ -36,6 +36,8 @@ import httpx
 
 from app.config import Settings, get_settings
 from app.models import (
+    EvolutionChain,
+    EvolutionStep,
     NamedResource,
     PokemonAbility,
     PokemonDetail,
@@ -46,6 +48,7 @@ from app.models import (
     PokemonStats,
     PokemonSummary,
 )
+from app.services.card_renderer import type_label
 from app.services.resilience import CircuitBreaker, Clock, TTLCache
 
 logger = logging.getLogger("pokedex_api.pokeapi")
@@ -203,6 +206,82 @@ def to_pokemon_detail(data: dict[str, Any]) -> PokemonDetail:
             front_shiny=sprites.get("front_shiny"),
             official_artwork=artwork,
         ),
+    )
+
+
+_ITEM_NAMES_ES: Final = {
+    "fire-stone": "Piedra Fuego",
+    "water-stone": "Piedra Agua",
+    "thunder-stone": "Piedra Trueno",
+    "leaf-stone": "Piedra Hoja",
+    "moon-stone": "Piedra Lunar",
+    "sun-stone": "Piedra Solar",
+    "shiny-stone": "Piedra Día",
+    "dusk-stone": "Piedra Noche",
+    "dawn-stone": "Piedra Alba",
+    "ice-stone": "Piedra Hielo",
+}
+_TIME_OF_DAY_ES: Final = {"day": "de día", "night": "de noche", "dusk": "al anochecer"}
+
+
+def _pretty(slug: str) -> str:
+    return slug.replace("-", " ").title()
+
+
+def evolution_condition(details: list[dict[str, Any]]) -> str | None:
+    """Describe en español cómo se evoluciona (se usa el primer método conocido)."""
+    if not details:
+        return None
+    detail = details[0]
+    trigger = (detail.get("trigger") or {}).get("name")
+    parts: list[str] = []
+    if trigger == "level-up":
+        if detail.get("min_level"):
+            parts.append(f"nivel {detail['min_level']}")
+        if detail.get("min_happiness"):
+            parts.append("amistad alta")
+        if detail.get("known_move_type"):
+            move_type = type_label(detail["known_move_type"]["name"])
+            parts.append(f"conociendo un movimiento de tipo {move_type}")
+        if not parts:
+            parts.append("subir de nivel")
+    elif trigger == "use-item" and detail.get("item"):
+        item = detail["item"]["name"]
+        parts.append(f"usar {_ITEM_NAMES_ES.get(item, _pretty(item))}")
+    elif trigger == "trade":
+        parts.append("intercambio")
+        if detail.get("held_item"):
+            parts.append(f"llevando {_pretty(detail['held_item']['name'])}")
+    elif trigger:
+        parts.append(_pretty(trigger))
+    if detail.get("time_of_day") in _TIME_OF_DAY_ES:
+        parts.append(_TIME_OF_DAY_ES[detail["time_of_day"]])
+    return ", ".join(parts) or None
+
+
+def to_evolution_chain(data: dict[str, Any]) -> EvolutionChain:
+    """Aplana el árbol de PokeAPI en una lista de etapas, conservando las ramas."""
+    steps: list[EvolutionStep] = []
+
+    def walk(node: dict[str, Any], stage: int, parent: str | None) -> None:
+        species = node["species"]
+        steps.append(
+            EvolutionStep(
+                id=_id_from_url(species["url"]),
+                name=species["name"],
+                stage=stage,
+                evolves_from=parent,
+                condition=evolution_condition(node.get("evolution_details") or []),
+            )
+        )
+        for child in node.get("evolves_to") or []:
+            walk(child, stage + 1, species["name"])
+
+    walk(data["chain"], 1, None)
+    return EvolutionChain(
+        id=data["id"],
+        stages=max(s.stage for s in steps),
+        steps=sorted(steps, key=lambda s: s.stage),
     )
 
 
@@ -471,6 +550,15 @@ class PokeAPIService:
             NamedResource(id=_id_from_url(p["pokemon"]["url"]), name=p["pokemon"]["name"])
             for p in data.get("pokemon", [])
         ]
+
+    async def get_evolution_chain(self, chain_id: int) -> EvolutionChain:
+        """Cadena evolutiva completa. No cambia nunca, así que se cachea un día."""
+        if chain_id < 1:
+            raise InvalidIdentifierError("ID de cadena evolutiva no válido.")
+        data = await self._get_json(
+            f"/evolution-chain/{chain_id}", "Cadena evolutiva", str(chain_id), ttl=INDEX_TTL_SECONDS
+        )
+        return to_evolution_chain(data)
 
     async def get_species_count(self) -> int | None:
         """Número de especies de la Pokédex Nacional. Cambia muy pocas veces (con cada
