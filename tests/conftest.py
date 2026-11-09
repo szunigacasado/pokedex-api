@@ -14,6 +14,8 @@ os.environ.setdefault("DATABASE_URL", "sqlite://")
 # Coste mínimo de bcrypt en los tests: el algoritmo es el mismo, pero cada hash tarda
 # milisegundos en lugar de ~250 ms.
 os.environ.setdefault("BCRYPT_ROUNDS", "4")
+# Los tests no escriben el fichero de log; hay un test específico que lo comprueba.
+os.environ.setdefault("LOG_FILE", "")
 
 from collections.abc import Iterator
 
