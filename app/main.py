@@ -8,17 +8,21 @@ que sustituye a los antiguos eventos ``startup`` y ``shutdown``.
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
 
+from app import docs
 from app.config import get_settings
 from app.database import create_db_and_tables, get_session
 from app.errors import register_exception_handlers
@@ -26,9 +30,12 @@ from app.logging_config import configure_logging
 from app.middleware import RequestLoggingMiddleware
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.routers import auth, pokedex, pokemon, teams
+from app.security_middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.services.pokeapi_service import PokeAPIService
 
 logger = logging.getLogger("pokedex_api")
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 API_DESCRIPTION = """
 API REST de **Pokédex personal**.
@@ -72,7 +79,15 @@ def create_app() -> FastAPI:
         # versión de librerías ni del servidor.
         version="v1",
         lifespan=lifespan,
+        # La página /docs es propia (app/docs.py): sin pistas de la tecnología y con los
+        # recursos del CDN fijados por versión y verificados con SRI. ReDoc no se publica.
+        docs_url=None,
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
+    if settings.docs_enabled:
+        app.include_router(docs.router)
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     @app.get(
         "/health",
@@ -117,9 +132,17 @@ def create_app() -> FastAPI:
         ],
         max_age=settings.cors_max_age_seconds,
     )
-    # El último middleware añadido es el más externo: el registro de peticiones envuelve
-    # a todos los demás, así que mide la duración completa y ve también los rechazos de
-    # CORS y los errores no controlados.
+    # Cadena de middlewares. El último que se añade es el más externo, así que una
+    # petición los atraviesa en este orden:
+    #
+    #   RequestLogging → SecurityHeaders → TrustedHost → BodySizeLimit → CORS → rutas
+    #
+    # - El registro envuelve todo: mide la duración completa y ve todos los rechazos.
+    # - Las cabeceras de seguridad se añaden también a los 400/413 de los siguientes.
+    # - Un Host falso o un cuerpo enorme se rechazan antes de llegar a la aplicación.
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_body_bytes)
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+    app.add_middleware(SecurityHeadersMiddleware, hsts_max_age=settings.hsts_max_age_seconds)
     app.add_middleware(RequestLoggingMiddleware)
 
     api_v1 = APIRouter(prefix="/api/v1")
