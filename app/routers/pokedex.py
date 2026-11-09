@@ -11,12 +11,13 @@ from enum import StrEnum
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, HTTPException, Path, Query, Response, status
+from fastapi import APIRouter, HTTPException, Path, Query, Request, Response, status
 from sqlalchemy import func, nulls_last
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 from starlette.concurrency import run_in_threadpool
 
+from app import rate_limit as rl
 from app.dependencies import CurrentUser, PokeAPIDep, SessionDep
 from app.models import (
     PokedexEntry,
@@ -28,6 +29,7 @@ from app.models import (
     User,
     utc_now,
 )
+from app.rate_limit import limiter
 from app.services.exporters import pokedex_to_csv, pokedex_to_pdf
 from app.services.stats import summarize
 
@@ -94,8 +96,14 @@ FavoriteFilter = Annotated[
         503: {"description": "PokeAPI no está disponible"},
     },
 )
+@limiter.limit(rl.EXTERNAL)
 async def add_entry(
-    payload: PokedexEntryCreate, user: CurrentUser, session: SessionDep, pokeapi: PokeAPIDep
+    request: Request,
+    response: Response,
+    payload: PokedexEntryCreate,
+    user: CurrentUser,
+    session: SessionDep,
+    pokeapi: PokeAPIDep,
 ) -> PokedexEntry:
     """Añade un Pokémon a la Pokédex del usuario autenticado.
 
@@ -141,7 +149,10 @@ async def add_entry(
 
 
 @router.get("", response_model=PokedexPage, summary="Listar mi Pokédex")
+@limiter.limit(rl.DEFAULT)
 def list_entries(
+    request: Request,
+    response: Response,
     user: CurrentUser,
     session: SessionDep,
     captured: CapturedFilter = None,
@@ -176,7 +187,9 @@ def list_entries(
     response_class=Response,
     responses={200: {"content": {"text/csv": {}, "application/pdf": {}}}},
 )
+@limiter.limit(rl.EXPORT)
 async def export_entries(
+    request: Request,
     user: CurrentUser,
     session: SessionDep,
     pokeapi: PokeAPIDep,
@@ -229,7 +242,10 @@ def _parse_timezone(name: str) -> ZoneInfo:
 
 
 @router.get("/stats", response_model=PokedexStats, summary="Estadísticas de mi Pokédex")
+@limiter.limit(rl.DEFAULT)
 async def pokedex_stats(
+    request: Request,
+    response: Response,
     user: CurrentUser,
     session: SessionDep,
     pokeapi: PokeAPIDep,
@@ -285,7 +301,10 @@ async def pokedex_stats(
     summary="Consultar una entrada",
     responses={404: {"description": "No existe o no es tuya"}},
 )
-def get_entry(entry_id: EntryId, user: CurrentUser, session: SessionDep) -> PokedexEntry:
+@limiter.limit(rl.DEFAULT)
+def get_entry(
+    request: Request, response: Response, entry_id: EntryId, user: CurrentUser, session: SessionDep
+) -> PokedexEntry:
     return _owned_entry(session, user, entry_id)
 
 
@@ -298,8 +317,14 @@ def get_entry(entry_id: EntryId, user: CurrentUser, session: SessionDep) -> Poke
         422: {"description": "Datos no válidos o incoherentes"},
     },
 )
+@limiter.limit(rl.DEFAULT)
 def update_entry(
-    entry_id: EntryId, payload: PokedexEntryUpdate, user: CurrentUser, session: SessionDep
+    request: Request,
+    response: Response,
+    entry_id: EntryId,
+    payload: PokedexEntryUpdate,
+    user: CurrentUser,
+    session: SessionDep,
 ) -> PokedexEntry:
     """Actualización parcial: solo cambian los campos enviados (enviar `null` en
     `nickname` o `notes` los borra).
@@ -348,7 +373,10 @@ def update_entry(
     summary="Eliminar una entrada",
     responses={404: {"description": "No existe o no es tuya"}},
 )
-def delete_entry(entry_id: EntryId, user: CurrentUser, session: SessionDep) -> None:
+@limiter.limit(rl.DEFAULT)
+def delete_entry(
+    request: Request, response: Response, entry_id: EntryId, user: CurrentUser, session: SessionDep
+) -> None:
     """Elimina la entrada. Si formaba parte de algún equipo, sale también de él."""
     entry = _owned_entry(session, user, entry_id)
     session.delete(entry)

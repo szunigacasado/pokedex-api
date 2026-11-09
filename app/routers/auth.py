@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import or_, select
 
+from app import rate_limit as rl
 from app.auth import (
     InvalidTokenError,
     create_access_token,
@@ -22,6 +23,7 @@ from app.auth import (
 from app.config import get_settings
 from app.dependencies import CurrentUser, SessionDep
 from app.models import RefreshRequest, RefreshToken, TokenPair, User, UserCreate, UserRead, utc_now
+from app.rate_limit import limiter
 
 logger = logging.getLogger("pokedex_api.auth")
 
@@ -79,7 +81,10 @@ def _revoke_family(session: SessionDep, family_id: str) -> None:
     summary="Registrar un usuario",
     responses={409: {"description": "El nombre de usuario o el email ya existen"}},
 )
-def register(payload: UserCreate, session: SessionDep, request: Request) -> User:
+@limiter.limit(rl.REGISTER)
+def register(
+    response: Response, payload: UserCreate, session: SessionDep, request: Request
+) -> User:
     """Crea una cuenta nueva.
 
     - **username**: 3-50 caracteres (letras, números, `.`, `_`, `-`). Se guarda en minúsculas.
@@ -121,6 +126,7 @@ def register(payload: UserCreate, session: SessionDep, request: Request) -> User
         429: {"description": "Cuenta bloqueada temporalmente por demasiados intentos fallidos"},
     },
 )
+@limiter.limit(rl.LOGIN)
 def login(
     form: Annotated[OAuth2PasswordRequestForm, Depends()],
     session: SessionDep,
@@ -202,7 +208,10 @@ def _load_refresh_token(session: SessionDep, raw_token: str) -> tuple[dict, Refr
     summary="Renovar los tokens",
     responses={401: {"description": "Refresh token no válido, caducado o ya usado"}},
 )
-def refresh(payload: RefreshRequest, session: SessionDep, response: Response) -> TokenPair:
+@limiter.limit(rl.TOKEN)
+def refresh(
+    request: Request, payload: RefreshRequest, session: SessionDep, response: Response
+) -> TokenPair:
     """Cambia un refresh token por un par de tokens nuevo (**rotación**).
 
     Cada refresh token sirve una sola vez. Si se presenta uno ya usado, se interpreta
@@ -233,7 +242,10 @@ def refresh(payload: RefreshRequest, session: SessionDep, response: Response) ->
     summary="Cerrar sesión",
     responses={401: {"description": "Refresh token no válido"}},
 )
-def logout(payload: RefreshRequest, session: SessionDep) -> None:
+@limiter.limit(rl.TOKEN)
+def logout(
+    request: Request, response: Response, payload: RefreshRequest, session: SessionDep
+) -> None:
     """Revoca el refresh token y todos los de su misma sesión.
 
     El access token sigue siendo válido hasta que caduca: es la contrapartida de usar
@@ -253,6 +265,7 @@ def logout(payload: RefreshRequest, session: SessionDep) -> None:
     summary="Usuario autenticado",
     responses={401: {"description": "Sin token o token no válido"}},
 )
-def read_me(current_user: CurrentUser) -> User:
+@limiter.limit(rl.DEFAULT)
+def read_me(request: Request, response: Response, current_user: CurrentUser) -> User:
     """Devuelve los datos del usuario dueño del access token."""
     return current_user

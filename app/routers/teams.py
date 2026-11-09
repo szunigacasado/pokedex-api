@@ -7,11 +7,12 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Path, Response, status
+from fastapi import APIRouter, HTTPException, Path, Request, Response, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 from starlette.concurrency import run_in_threadpool
 
+from app import rate_limit as rl
 from app.dependencies import CurrentUser, PokeAPIDep, SessionDep
 from app.models import (
     PokedexEntry,
@@ -26,6 +27,7 @@ from app.models import (
     User,
     utc_now,
 )
+from app.rate_limit import limiter
 from app.services.card_renderer import encode_card, render_card
 from app.services.exporters import team_to_pdf
 from app.services.pokeapi_service import PokeAPIError, PokeAPIService
@@ -142,7 +144,14 @@ async def _members_detail(pokeapi: PokeAPIService, team: TeamRead) -> list[Pokem
         422: {"description": "Más de 6 Pokémon, repetidos o que no están en tu Pokédex"},
     },
 )
-def create_team(payload: TeamCreate, user: CurrentUser, session: SessionDep) -> TeamRead:
+@limiter.limit(rl.DEFAULT)
+def create_team(
+    request: Request,
+    response: Response,
+    payload: TeamCreate,
+    user: CurrentUser,
+    session: SessionDep,
+) -> TeamRead:
     """Crea un equipo con hasta 6 Pokémon **de tu Pokédex**, indicados por su ID de
     PokeAPI. El orden de `pokemon_ids` es la posición de cada uno en el equipo."""
     teams = session.exec(select(func.count()).where(Team.trainer_id == user.id)).one()
@@ -164,7 +173,10 @@ def create_team(payload: TeamCreate, user: CurrentUser, session: SessionDep) -> 
 
 
 @router.get("", response_model=list[TeamRead], summary="Listar mis equipos")
-def list_teams(user: CurrentUser, session: SessionDep) -> list[TeamRead]:
+@limiter.limit(rl.DEFAULT)
+def list_teams(
+    request: Request, response: Response, user: CurrentUser, session: SessionDep
+) -> list[TeamRead]:
     teams = session.exec(select(Team).where(Team.trainer_id == user.id).order_by(Team.id)).all()
     return [_to_read(t) for t in teams]
 
@@ -175,7 +187,10 @@ def list_teams(user: CurrentUser, session: SessionDep) -> list[TeamRead]:
     summary="Consultar un equipo",
     responses={404: {"description": "No existe o no es tuyo"}},
 )
-def get_team(team_id: TeamId, user: CurrentUser, session: SessionDep) -> TeamRead:
+@limiter.limit(rl.DEFAULT)
+def get_team(
+    request: Request, response: Response, team_id: TeamId, user: CurrentUser, session: SessionDep
+) -> TeamRead:
     return _to_read(_owned_team(session, user, team_id))
 
 
@@ -189,8 +204,14 @@ def get_team(team_id: TeamId, user: CurrentUser, session: SessionDep) -> TeamRea
         422: {"description": "Más de 6 Pokémon, repetidos o que no están en tu Pokédex"},
     },
 )
+@limiter.limit(rl.DEFAULT)
 def update_team(
-    team_id: TeamId, payload: TeamUpdate, user: CurrentUser, session: SessionDep
+    request: Request,
+    response: Response,
+    team_id: TeamId,
+    payload: TeamUpdate,
+    user: CurrentUser,
+    session: SessionDep,
 ) -> TeamRead:
     """Actualiza el nombre, la descripción y los miembros.
 
@@ -225,7 +246,10 @@ def update_team(
     summary="Eliminar un equipo",
     responses={404: {"description": "No existe o no es tuyo"}},
 )
-def delete_team(team_id: TeamId, user: CurrentUser, session: SessionDep) -> None:
+@limiter.limit(rl.DEFAULT)
+def delete_team(
+    request: Request, response: Response, team_id: TeamId, user: CurrentUser, session: SessionDep
+) -> None:
     """Elimina el equipo. Los Pokémon siguen en tu Pokédex."""
     session.delete(_owned_team(session, user, team_id))
     session.commit()
@@ -243,8 +267,14 @@ def delete_team(team_id: TeamId, user: CurrentUser, session: SessionDep) -> None
         503: {"description": "PokeAPI caída"},
     },
 )
+@limiter.limit(rl.EXTERNAL)
 async def analyze(
-    team_id: TeamId, user: CurrentUser, session: SessionDep, pokeapi: PokeAPIDep
+    request: Request,
+    response: Response,
+    team_id: TeamId,
+    user: CurrentUser,
+    session: SessionDep,
+    pokeapi: PokeAPIDep,
 ) -> TeamAnalysis:
     """Estadísticas combinadas (total y media de cada estadística base) y cobertura de
     tipos con la tabla oficial de efectividades: debilidades compartidas, resistencias y
@@ -266,8 +296,9 @@ async def analyze(
         503: {"description": "PokeAPI caída"},
     },
 )
+@limiter.limit(rl.EXPORT)
 async def export_team(
-    team_id: TeamId, user: CurrentUser, session: SessionDep, pokeapi: PokeAPIDep
+    request: Request, team_id: TeamId, user: CurrentUser, session: SessionDep, pokeapi: PokeAPIDep
 ) -> Response:
     """PDF del equipo con nombre y descripción, las fichas de sus Pokémon, las
     estadísticas combinadas (con gráfico radar) y la tabla de cobertura de tipos."""
