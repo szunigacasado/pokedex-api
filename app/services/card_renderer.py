@@ -109,6 +109,11 @@ def _mix(color: str, other: str, amount: float) -> tuple[int, int, int]:
     return tuple(round(x + (y - x) * amount) for x, y in zip(a, b, strict=True))  # type: ignore[return-value]
 
 
+def darken(color: str, amount: float = 0.35) -> str:
+    """Versión más oscura de un color, para escribir texto legible sobre fondo blanco."""
+    return "#{:02X}{:02X}{:02X}".format(*_mix(color, "#000000", amount))
+
+
 def _readable_text_on(color: str) -> str:
     r, g, b = _hex_to_rgb(color)
     luminance = 0.299 * r + 0.587 * g + 0.114 * b
