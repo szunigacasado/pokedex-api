@@ -101,6 +101,24 @@ class Settings(BaseSettings):
     ]
     cors_max_age_seconds: int = Field(default=3600, ge=0, le=86400)
 
+    # ── Seguridad HTTP ───────────────────────────────────────
+    # Hosts permitidos en la cabecera Host (protege de Host header injection y de DNS
+    # rebinding). Admite comodines de subdominio: *.ejemplo.com
+    allowed_hosts: Annotated[list[str], NoDecode] = ["localhost", "127.0.0.1", "[::1]"]
+    max_body_bytes: int = Field(default=1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+    hsts_max_age_seconds: int = Field(default=63_072_000, ge=0)  # 2 años
+    docs_enabled: bool = Field(default=True, description="Publicar /docs, /redoc y /openapi.json")
+
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def _split_hosts(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip()
+            if value.startswith("["):
+                return json.loads(value)
+            return [host.strip().lower() for host in value.split(",") if host.strip()]
+        return value
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_origins(cls, value: object) -> object:
@@ -137,6 +155,12 @@ class Settings(BaseSettings):
                     parse_many(value)
                 except ValueError as exc:
                     raise ValueError(f"{name.upper()} no es un límite válido: {value!r}") from exc
+        return self
+
+    @model_validator(mode="after")
+    def _check_allowed_hosts(self) -> "Settings":
+        if self.is_production and "*" in self.allowed_hosts:
+            raise ValueError("ALLOWED_HOSTS no puede incluir '*' en producción.")
         return self
 
     @model_validator(mode="after")
