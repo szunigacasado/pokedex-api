@@ -17,6 +17,11 @@ updates:
       dependencias:
         patterns: ["*"]
         update-types: [minor, patch]
+    ignore:
+      # passlib 1.7.4 (obligatorio según el enunciado) no funciona con bcrypt 4.1 o
+      # superior; bcrypt se fija en 4.0.1 a propósito. Ver el PR #25, cerrado.
+      - dependency-name: bcrypt
+        versions: [">=4.1"]
 
   - package-ecosystem: github-actions
     directory: /
