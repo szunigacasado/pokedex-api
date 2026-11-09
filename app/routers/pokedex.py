@@ -7,6 +7,7 @@ autenticado. Si alguien pide una entrada que existe pero es de otro usuario, se 
 
 import logging
 from datetime import UTC, datetime
+from email.utils import format_datetime
 from enum import StrEnum
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -18,6 +19,7 @@ from sqlmodel import Session, select
 from starlette.concurrency import run_in_threadpool
 
 from app import rate_limit as rl
+from app.config import get_settings
 from app.dependencies import CurrentUser, PokeAPIDep, SessionDep
 from app.models import (
     PokedexEntry,
@@ -148,7 +150,29 @@ async def add_entry(
     return entry
 
 
-@router.get("", response_model=PokedexPage, summary="Listar mi Pokédex")
+SUCCESSOR_LINK = '</api/v2/pokedex>; rel="successor-version"'
+
+
+def _deprecation_headers(response: Response) -> None:
+    """Cabeceras estándar de deprecación:
+
+    - ``Deprecation`` (RFC 9745): desde cuándo está obsoleto, como ``@<timestamp>``.
+    - ``Sunset`` (RFC 8594): fecha HTTP en la que dejará de funcionar.
+    - ``Link`` con ``rel="successor-version"``: a dónde migrar.
+    """
+    settings = get_settings()
+    response.headers["Deprecation"] = f"@{int(settings.v1_pokedex_deprecated_at.timestamp())}"
+    response.headers["Sunset"] = format_datetime(settings.v1_pokedex_sunset, usegmt=True)
+    response.headers["Link"] = SUCCESSOR_LINK
+
+
+@router.get(
+    "",
+    response_model=PokedexPage,
+    summary="Listar mi Pokédex (obsoleto: usa /api/v2/pokedex)",
+    deprecated=True,
+    responses={410: {"description": "Retirado: la fecha de Sunset ya ha pasado"}},
+)
 @limiter.limit(rl.DEFAULT)
 def list_entries(
     request: Request,
@@ -166,7 +190,21 @@ def list_entries(
 
     `count` es el total de entradas que cumplen los filtros, para que el cliente pueda
     construir la paginación. Al ordenar por `capture_date`, los no capturados van al final.
+
+    **Obsoleto:** sigue funcionando igual, pero cada respuesta lleva las cabeceras
+    `Deprecation`, `Sunset` y `Link` hacia `/api/v2/pokedex`. Después de la fecha de
+    Sunset responde `410 Gone`.
     """
+    if utc_now() >= get_settings().v1_pokedex_sunset:
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            detail="Esta versión del endpoint se ha retirado. Usa /api/v2/pokedex.",
+            headers={"Link": SUCCESSOR_LINK},
+        )
+    _deprecation_headers(response)
+    # Saber quién sigue usando la v1 ayuda a decidir cuándo retirarla.
+    logger.info("Uso de endpoint obsoleto GET /api/v1/pokedex (user_id=%s)", user.id)
+
     query = _filtered(user, captured, favorite)
     count = session.exec(select(func.count()).select_from(query.subquery())).one()
 

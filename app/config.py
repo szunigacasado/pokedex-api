@@ -7,6 +7,7 @@ tokens con un secreto adivinable.
 """
 
 import json
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Annotated, Literal
 
@@ -108,6 +109,12 @@ class Settings(BaseSettings):
     max_body_bytes: int = Field(default=1024 * 1024, ge=1024, le=50 * 1024 * 1024)
     hsts_max_age_seconds: int = Field(default=63_072_000, ge=0)  # 2 años
     docs_enabled: bool = Field(default=True, description="Publicar /docs, /redoc y /openapi.json")
+
+    # ── Versionado ───────────────────────────────────────────
+    # GET /api/v1/pokedex está obsoleto desde la publicación de la v2 y se retira en la
+    # fecha de Sunset; a partir de entonces responde 410 Gone.
+    v1_pokedex_deprecated_at: datetime = datetime(2026, 11, 9, tzinfo=UTC)
+    v1_pokedex_sunset: datetime = datetime(2027, 6, 30, 23, 59, 59, tzinfo=UTC)
 
     @field_validator("allowed_hosts", mode="before")
     @classmethod

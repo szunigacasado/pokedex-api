@@ -322,7 +322,50 @@ Solo los orígenes de `CORS_ORIGINS` pueden llamar a la API desde un navegador. 
 CORS no es un mecanismo de autenticación: solo impide que una web ajena lea las respuestas desde el navegador de una víctima. Las peticiones desde `curl` o desde un servidor no pasan por CORS, y para eso están el JWT y el rate limiting.
 
 ### Versionado
-_Se completa en `features/api-v2`._
+
+La versión va en la ruta (`/api/v1/…`, `/api/v2/…`): es visible, fácil de probar con `curl` o Swagger, y cada versión se documenta por separado. La **v2** ([`app/routers/v2.py`](app/routers/v2.py)) es un ejemplo real de evolución:
+
+| Endpoint v2 | Qué cambia respecto a v1 |
+|---|---|
+| `GET /api/v2/pokedex?limit=&cursor=&captured=&favorite=` | Cada entrada incluye su **evolución** (etapa, de quién viene, a qué evoluciona y cómo, en español). Paginación **por cursor** y respuesta `{items, limit, next_cursor}`. |
+| `GET /api/v2/pokemon/{id_or_name}/evolution` | Nuevo: la cadena evolutiva completa con sus ramas (Eevee tiene 8: «usar Piedra Agua», «amistad alta, de día»…). |
+
+```json
+{"pokemon_name": "pikachu", "...": "...",
+ "evolution": {"chain_id": 10, "stage": 2, "total_stages": 3, "evolves_from": "pichu",
+               "evolves_to": [{"id": 26, "name": "raichu", "condition": "usar Piedra Trueno"}],
+               "is_final_stage": false}}
+```
+
+**¿Por qué es importante versionar?** Una API es un **contrato** con clientes que no controlamos: una aplicación móvil instalada, el *frontend* de otro equipo, un script del profesor. Si cambiamos la forma de una respuesta sin avisar, esos clientes se rompen en producción el mismo día. Versionar permite:
+- Evolucionar la API sin romper a nadie: la v1 sigue funcionando exactamente igual mientras la v2 añade lo nuevo.
+- Que cada cliente migre **cuando pueda**, no cuando nosotros desplegamos.
+- Documentar cada contrato por separado y saber con qué versión trabaja cada cliente.
+- Retirar lo antiguo de forma ordenada y anunciada, no por sorpresa.
+
+**¿Qué cambios justifican una nueva versión?** Los **incompatibles** (*breaking changes*), los que harían fallar a un cliente que funcionaba:
+
+| Requiere versión nueva (incompatible) | No la requiere (compatible) |
+|---|---|
+| Cambiar la forma de la respuesta (`{count, results}` → `{items, next_cursor}`) | Añadir un campo nuevo a una respuesta |
+| Renombrar o eliminar un campo o un parámetro | Añadir un endpoint nuevo |
+| Cambiar el tipo de un campo (`int` → `string`) o su significado | Añadir un parámetro **opcional** |
+| Hacer obligatorio un parámetro que era opcional | Corregir un error sin cambiar el contrato |
+| Cambiar la paginación (`offset` → cursor), la autenticación o los códigos de estado | Mejorar el rendimiento o los mensajes de error |
+
+En esta API, el listado de la Pokédex cambia de forma y de paginación, así que **necesita v2**. En cambio, `/pokemon/{id}/evolution` es nuevo y podría haberse añadido a la v1 sin romper nada. Se publica en v2 para agrupar las novedades. **Solo se versiona lo que cambia:** el resto de recursos siguen en v1 y no se duplica código.
+
+**¿Por qué cursor y no `offset`?** Con `offset`, si se añade o borra una entrada mientras el cliente pagina, se repiten o se saltan elementos (hay un test que lo demuestra). Además, `OFFSET 10000` obliga a la base de datos a recorrer 10 000 filas. El cursor guarda el último ID visto y la consulta usa el índice (`WHERE id > :cursor`). El cursor es **opaco** (base64 de un JSON con versión), así que su formato puede cambiar sin cambiar el contrato.
+
+**Estrategia de deprecación.** Se aplica a `GET /api/v1/pokedex`:
+1. **Anunciar en cada respuesta** con cabeceras estándar, para que los clientes y sus herramientas lo detecten de forma automática:
+   - `Deprecation: @1794182400` (RFC 9745): obsoleto desde el 9 de noviembre de 2026.
+   - `Sunset: Wed, 30 Jun 2027 23:59:59 GMT` (RFC 8594): fecha de retirada.
+   - `Link: </api/v2/pokedex>; rel="successor-version"`: a dónde migrar.
+2. **Marcarlo en la documentación:** OpenAPI lo declara `deprecated: true` y Swagger lo muestra tachado.
+3. **Medir quién lo sigue usando:** cada llamada queda registrada (`Uso de endpoint obsoleto … user_id=…`) para avisar a esos clientes y decidir con datos.
+4. **Periodo de convivencia** de unos 7 meses (hasta el 30 de junio de 2027), en el que v1 y v2 funcionan a la vez. La v1 no recibe novedades, solo correcciones de seguridad.
+5. **Retirada:** a partir de la fecha de *Sunset* el endpoint responde **`410 Gone`** con el `Link` a la v2, en lugar de un `404` ambiguo. Las fechas se configuran (`V1_POKEDEX_DEPRECATED_AT`, `V1_POKEDEX_SUNSET`), así que se pueden ampliar sin tocar el código.
 
 ### Otras decisiones
 
