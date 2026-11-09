@@ -13,7 +13,7 @@ dependencies = [
   "python-jose[cryptography]>=3.4.0",
   "python-multipart>=0.0.18",
   "sqlmodel>=0.0.22",
-  "uvicorn[standard]>=0.32",
+  "uvicorn[standard]>=0.54.0",
 ]
 
 [dependency-groups]
