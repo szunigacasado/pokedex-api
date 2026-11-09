@@ -134,6 +134,23 @@ La documentación completa e interactiva está en **`/docs`** (Swagger). Para pr
 | `POST` | `/refresh` | — | Cambia un refresh token por un par nuevo (rotación). Reutilizar uno ya usado revoca la sesión entera. |
 | `POST` | `/logout` | — | Revoca el refresh token y los de su misma sesión. `204`. |
 | `GET` | `/me` | 🔒 | Datos del usuario autenticado. |
+| `GET` | `/google/login` | — | **Iniciar sesión con Google.** Ábrelo en el navegador: redirige a Google y, al volver, entrega los tokens de la API. |
+| `GET` | `/google/callback` | — | Vuelta desde Google (no se llama a mano). |
+
+#### Iniciar sesión con Google
+
+1. Abre <http://localhost:8000/api/v1/auth/google/login> en el navegador y elige tu cuenta de Google.
+2. Al volver, la API muestra `access_token` y `refresh_token`. Son tokens **propios** de la API, iguales que los del login con contraseña.
+3. En `/docs` → **Authorize**, pega el `access_token` en el campo **HTTPBearer**.
+
+Si `OAUTH_SUCCESS_REDIRECT` apunta a un frontend, en vez de mostrar el JSON se redirige allí con los tokens en el fragmento de la URL (`#access_token=…`), que el navegador nunca envía a ningún servidor.
+
+**Configurar las credenciales** (una vez, gratis):
+1. En [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → *Crear credenciales* → *ID de cliente de OAuth* → tipo **Aplicación web**.
+2. En *URIs de redirección autorizados* añade `http://localhost:8000/api/v1/auth/google/callback` (y la de HTTPS si se despliega).
+3. Copia el ID y el secreto en `.env` como `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`.
+
+Sin credenciales, los dos endpoints responden `503` y el resto de la API funciona igual.
 
 ```bash
 # Registro
@@ -451,6 +468,22 @@ _Resumen; el detalle completo irá en `SECURITY.md`._
 | El usuario se vuelve a comprobar en la base de datos en cada petición | Un token de un usuario borrado o desactivado deja de valer al momento. |
 | `Cache-Control: no-store` en las respuestas con tokens | Ningún proxy ni navegador guarda los tokens en caché. |
 | Rehash automático al iniciar sesión | Si se sube el coste de bcrypt, las contraseñas antiguas se actualizan solas. |
+
+### Inicio de sesión con Google (OpenID Connect)
+
+Se implementa con `httpx` y `python-jose`, sin librerías OAuth adicionales, en [`app/services/google_oauth.py`](app/services/google_oauth.py) y [`app/routers/oauth.py`](app/routers/oauth.py). Sigue el RFC 9700 (*OAuth 2.0 Security Best Current Practice*):
+
+| Medida | Protege de |
+|---|---|
+| Flujo *authorization code* con **PKCE (S256)** | Que un código de autorización interceptado se pueda canjear: sin el `code_verifier`, que nunca sale del servidor, no sirve. |
+| **`state`** aleatorio comparado en tiempo constante | **CSRF de login**: que un atacante haga terminar a la víctima con la sesión del atacante. |
+| **`nonce`** dentro del ID token firmado | Reutilizar un ID token antiguo (*replay*). |
+| **Verificación completa del ID token** | Firma **RS256** con las claves públicas de Google (JWKS en caché y recargado si Google rota la clave), emisor, audiencia (nuestro `client_id`), caducidad, `at_hash` y `email_verified`. El algoritmo está fijado: nunca se acepta el que diga el token. |
+| `state`, `nonce` y `code_verifier` en una **cookie firmada**, `HttpOnly`, `SameSite=Lax`, `Secure` por HTTPS, 10 minutos y limitada a `/api/v1/auth/google` | No hacen falta sesiones en el servidor y JavaScript no puede leerla. Su firma lleva una audiencia propia, así que no se confunde con un access token. |
+| Identidades en la tabla **`OAuthAccount`** por `(proveedor, subject)` | Se identifica por el ID estable de Google, no por el email, que puede cambiar. Admite más proveedores sin migrar la tabla `user`. |
+| **Sin vinculación automática por email** (`409`) | ***Pre-account hijacking***: como los emails locales no se verifican, un atacante podría registrar antes el email de la víctima con su contraseña y compartir la cuenta cuando la víctima entrase con Google. |
+| Las cuentas de Google tienen una **contraseña inutilizable** | Que se pueda entrar en ellas con contraseña. Se verifica contra el hash ficticio, así que el tiempo de respuesta es el mismo. |
+| Tras el login se emiten **nuestros propios tokens** | El resto de la API no depende de Google y la sesión se gestiona igual (rotación, revocación). |
 
 ### Cadena de middlewares
 

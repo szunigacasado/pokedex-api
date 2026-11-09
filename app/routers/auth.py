@@ -37,7 +37,7 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "desconocida"
 
 
-def _issue_token_pair(session: SessionDep, user: User, family_id: str) -> TokenPair:
+def issue_token_pair(session: SessionDep, user: User, family_id: str) -> TokenPair:
     """Emite un access token y un refresh token y registra este último."""
     access = create_access_token(user)
     refresh = create_refresh_token(user, family_id)
@@ -184,7 +184,7 @@ def login(
 
     response.headers["Cache-Control"] = "no-store"
     logger.info("Login correcto: id=%s", user.id)
-    return _issue_token_pair(session, user, family_id=uuid.uuid4().hex)
+    return issue_token_pair(session, user, family_id=uuid.uuid4().hex)
 
 
 # ═════════════════════════════════════════════════════════════
@@ -233,7 +233,7 @@ def refresh(
     stored.revoked_at = utc_now()
     session.add(stored)
     response.headers["Cache-Control"] = "no-store"
-    return _issue_token_pair(session, user, family_id=stored.family_id)
+    return issue_token_pair(session, user, family_id=stored.family_id)
 
 
 @router.post(

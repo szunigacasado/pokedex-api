@@ -57,9 +57,22 @@ def password_needs_rehash(hashed_password: str) -> bool:
     return _password_context().needs_update(hashed_password)
 
 
+#: Prefijo de las contraseñas «inutilizables» de las cuentas creadas con Google: no es un
+#: hash válido, así que ninguna contraseña puede coincidir con él.
+UNUSABLE_PASSWORD_PREFIX = "!oauth$"  # noqa: S105  (marcador, no una contraseña)
+
+
+def unusable_password() -> str:
+    return UNUSABLE_PASSWORD_PREFIX + uuid.uuid4().hex
+
+
 def verify_password(password: str, hashed_password: str | None) -> bool:
-    """Comprueba una contraseña. Con ``hashed_password=None`` gasta el mismo tiempo."""
-    if hashed_password is None:
+    """Comprueba una contraseña. Con ``hashed_password=None`` gasta el mismo tiempo.
+
+    Las cuentas creadas con Google tienen una contraseña inutilizable: se verifica
+    igualmente contra el hash ficticio (mismo tiempo de respuesta) y se devuelve False.
+    """
+    if hashed_password is None or hashed_password.startswith(UNUSABLE_PASSWORD_PREFIX):
         _password_context().verify(password, _dummy_hash())
         return False
     return _password_context().verify(password, hashed_password)
