@@ -15,27 +15,16 @@ from PIL import Image
 from app.models import PokemonAbility, PokemonDetail, PokemonSpecies, PokemonSprites, PokemonStats
 from app.services.card_renderer import _wrap, card_filename, render_card, type_label
 from app.services.pokeapi_service import PokeAPIService
-from tests.test_pokeapi_service import pokemon_payload, species_payload
+from tests.fakes import (
+    POKEAPI,
+    SPRITES,
+    artwork_png,
+    pokemon_payload,
+    species_payload,
+    with_real_sprites,
+)
 
-POKEAPI = "https://pokeapi.co/api/v2"
-SPRITES = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon"
 SEARCH = "/api/v1/pokemon/search"
-
-
-def artwork_png() -> bytes:
-    buffer = io.BytesIO()
-    Image.new("RGBA", (64, 64), (255, 220, 0, 255)).save(buffer, format="PNG")
-    return buffer.getvalue()
-
-
-def with_real_sprites(payload: dict) -> dict:
-    pid = payload["id"]
-    payload["sprites"]["front_default"] = f"{SPRITES}/{pid}.png"
-    payload["sprites"]["other"]["official-artwork"]["front_default"] = (
-        f"{SPRITES}/other/official-artwork/{pid}.png"
-    )
-    payload["species"] = {"name": payload["name"], "url": f"{POKEAPI}/pokemon-species/{pid}/"}
-    return payload
 
 
 @pytest.fixture
