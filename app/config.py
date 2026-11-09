@@ -41,6 +41,20 @@ class Settings(BaseSettings):
     )
     database_url: str = "sqlite:///./pokedex.db"
 
+    # ── JWT ──────────────────────────────────────────────────
+    # Solo algoritmos HMAC: la clave es simétrica y no existe clave pública que un
+    # atacante pueda usar para un ataque de confusión de algoritmo.
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
+    jwt_issuer: str = "pokedex-api"
+    jwt_audience: str = "pokedex-api-clients"
+    access_token_expire_minutes: int = Field(default=24 * 60, ge=1, le=7 * 24 * 60)
+    refresh_token_expire_days: int = Field(default=7, ge=1, le=90)
+
+    # ── Contraseñas e intentos de inicio de sesión ───────────
+    bcrypt_rounds: int = Field(default=12, ge=4, le=16)
+    max_failed_logins: int = Field(default=5, ge=1, le=20)
+    lockout_minutes: int = Field(default=15, ge=1, le=24 * 60)
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
