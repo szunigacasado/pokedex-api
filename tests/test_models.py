@@ -1,5 +1,7 @@
 """Tests de los modelos: las reglas críticas se cumplen también en la base de datos."""
 
+from datetime import UTC, datetime, timedelta, timezone
+
 import pytest
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
@@ -40,6 +42,29 @@ def make_entry(session: Session, owner: User, pokemon_id: int = 25) -> PokedexEn
 
 def test_utc_now_is_timezone_aware() -> None:
     assert utc_now().tzinfo is not None
+
+
+def test_dates_are_stored_and_returned_in_utc(session: Session) -> None:
+    ash = make_user(session)
+    madrid_summer = timezone(timedelta(hours=2))
+    ash.locked_until = datetime(2026, 7, 1, 12, 0, tzinfo=madrid_summer)
+    session.add(ash)
+    session.commit()
+    session.expire_all()
+
+    stored = session.get(User, ash.id).locked_until
+    assert stored == datetime(2026, 7, 1, 10, 0, tzinfo=UTC)
+    assert stored.tzinfo == UTC
+
+
+def test_naive_dates_are_interpreted_as_utc(session: Session) -> None:
+    ash = make_user(session)
+    ash.locked_until = datetime(2026, 1, 1, 9, 30)  # sin zona horaria
+    session.add(ash)
+    session.commit()
+    session.expire_all()
+
+    assert session.get(User, ash.id).locked_until == datetime(2026, 1, 1, 9, 30, tzinfo=UTC)
 
 
 def test_pokemon_types_are_stored_as_a_list(session: Session) -> None:
