@@ -6,11 +6,13 @@ arrancar con una clave débil o con la de ejemplo: es mejor fallar al inicio que
 tokens con un secreto adivinable.
 """
 
+import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field, SecretStr, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from limits import parse_many
+from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 Environment = Literal["development", "production", "test"]
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -66,6 +68,39 @@ class Settings(BaseSettings):
     pokeapi_breaker_threshold: int = Field(default=5, ge=1, le=100)
     pokeapi_breaker_cooldown_seconds: float = Field(default=30.0, gt=0)
 
+    # ── Rate limiting ────────────────────────────────────────
+    # Formato de la librería «limits»: "N/second|minute|hour|day". Se pueden combinar
+    # varios con ";", p. ej. "10/minute;100/hour".
+    rate_limit_enabled: bool = True
+    rate_limit_storage_uri: str = Field(
+        default="memory://",
+        description="memory:// en un solo proceso; redis://host:6379 si hay varias réplicas.",
+    )
+    rate_limit_register: str = "5/hour"
+    rate_limit_login: str = "10/minute"
+    rate_limit_token: str = "30/minute"  # noqa: S105  (límite de /refresh y /logout)
+    rate_limit_external: str = "30/minute"
+    rate_limit_export: str = "10/minute"
+    rate_limit_default: str = "100/minute"
+
+    # ── CORS ─────────────────────────────────────────────────
+    # Lista separada por comas o JSON. Nunca "*" en producción.
+    cors_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
+    cors_max_age_seconds: int = Field(default=3600, ge=0, le=86400)
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def _split_origins(cls, value: object) -> object:
+        if isinstance(value, str):
+            value = value.strip()
+            if value.startswith("["):
+                return json.loads(value)
+            return [origin.strip().rstrip("/") for origin in value.split(",") if origin.strip()]
+        return value
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
@@ -81,6 +116,28 @@ class Settings(BaseSettings):
             raise ValueError(f"SECRET_KEY debe tener al menos {MIN_SECRET_KEY_LENGTH} caracteres.")
         if self.is_production and _EXAMPLE_SECRET_MARKER in secret:
             raise ValueError("SECRET_KEY sigue siendo la de .env.example; genera una propia.")
+        return self
+
+    @model_validator(mode="after")
+    def _check_rate_limits(self) -> "Settings":
+        """Un límite mal escrito se detecta al arrancar, no en la primera petición."""
+        for name, value in self.model_dump().items():
+            if name.startswith("rate_limit_") and isinstance(value, str) and "://" not in value:
+                try:
+                    parse_many(value)
+                except ValueError as exc:
+                    raise ValueError(f"{name.upper()} no es un límite válido: {value!r}") from exc
+        return self
+
+    @model_validator(mode="after")
+    def _check_cors(self) -> "Settings":
+        for origin in self.cors_origins:
+            if origin == "*":
+                if self.is_production:
+                    raise ValueError("CORS_ORIGINS no puede ser '*' en producción.")
+                continue
+            if not origin.startswith(("http://", "https://")):
+                raise ValueError(f"Origen CORS no válido: {origin!r} (falta http:// o https://)")
         return self
 
 
