@@ -319,12 +319,50 @@ class PokedexEntry(PokedexEntryBase, table=True):
     owner: User = Relationship(back_populates="pokedex_entries")
 
 
+def _clean_optional_text(value: str | None) -> str | None:
+    """Quita espacios sobrantes; un texto vacío se guarda como ``None``."""
+    if value is None:
+        return None
+    value = " ".join(value.split())
+    return value or None
+
+
+def _not_in_future(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    if value > utc_now():
+        raise ValueError("La fecha de captura no puede estar en el futuro.")
+    return value
+
+
 class PokedexEntryCreate(SQLModel):
-    pokemon_id: int = Field(ge=1, description="ID del Pokémon en PokeAPI.")
+    pokemon_id: int = Field(ge=1, le=100_000, description="ID del Pokémon en PokeAPI.")
     nickname: str | None = Field(default=None, max_length=50)
     notes: str | None = Field(default=None, max_length=500)
     is_captured: bool = False
+    capture_date: datetime | None = Field(
+        default=None,
+        description="Si se marca como capturado sin fecha, se usa la fecha actual.",
+    )
     favorite: bool = False
+
+    @field_validator("nickname", "notes")
+    @classmethod
+    def _clean_texts(cls, value: str | None) -> str | None:
+        return _clean_optional_text(value)
+
+    @field_validator("capture_date")
+    @classmethod
+    def _check_date(cls, value: datetime | None) -> datetime | None:
+        return _not_in_future(value)
+
+    @model_validator(mode="after")
+    def _date_requires_capture(self) -> "PokedexEntryCreate":
+        if self.capture_date is not None and not self.is_captured:
+            raise ValueError("Solo un Pokémon capturado puede tener fecha de captura.")
+        return self
 
 
 class PokedexEntryRead(PokedexEntryBase):
@@ -344,6 +382,23 @@ class PokedexEntryUpdate(SQLModel):
     nickname: str | None = Field(default=None, max_length=50)
     notes: str | None = Field(default=None, max_length=500)
     favorite: bool | None = None
+
+    @field_validator("nickname", "notes")
+    @classmethod
+    def _clean_texts(cls, value: str | None) -> str | None:
+        return _clean_optional_text(value)
+
+    @field_validator("capture_date")
+    @classmethod
+    def _check_date(cls, value: datetime | None) -> datetime | None:
+        return _not_in_future(value)
+
+
+class PokedexPage(SQLModel):
+    count: int = Field(description="Total de entradas que cumplen los filtros.")
+    limit: int
+    offset: int
+    results: list[PokedexEntryRead]
 
 
 # ═════════════════════════════════════════════════════════════
