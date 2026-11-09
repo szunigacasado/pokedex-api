@@ -3,11 +3,13 @@
 import asyncio
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Path, Query, Response
+from fastapi import APIRouter, Path, Query, Request, Response
 from starlette.concurrency import run_in_threadpool
 
+from app import rate_limit as rl
 from app.dependencies import CurrentUser, PokeAPIDep
 from app.models import PokemonDetail, PokemonFullDetail, PokemonSearchResult, PokemonSpecies
+from app.rate_limit import limiter
 from app.services.card_renderer import card_filename, encode_card, render_card
 from app.services.pokeapi_service import PokeAPIError, PokeAPIService
 
@@ -45,7 +47,10 @@ async def _species_for(pokeapi: PokeAPIService, pokemon: PokemonDetail) -> Pokem
     summary="Buscar Pokémon",
     responses={k: v for k, v in ERRORS.items() if k != 404},
 )
+@limiter.limit(rl.EXTERNAL)
 async def search_pokemon(
+    request: Request,
+    response: Response,
     _: CurrentUser,
     pokeapi: PokeAPIDep,
     name: Annotated[
@@ -69,8 +74,9 @@ async def search_pokemon(
     summary="Detalle de un Pokémon",
     responses=ERRORS,
 )
+@limiter.limit(rl.EXTERNAL)
 async def get_pokemon(
-    id_or_name: IdOrName, _: CurrentUser, pokeapi: PokeAPIDep
+    request: Request, response: Response, id_or_name: IdOrName, _: CurrentUser, pokeapi: PokeAPIDep
 ) -> PokemonFullDetail:
     """Detalle completo: estadísticas, habilidades, tipos, sprites y la información de su
     especie (descripción de la Pokédex y categoría en español, generación, legendario...)."""
@@ -91,7 +97,9 @@ async def get_pokemon(
         **ERRORS,
     },
 )
+@limiter.limit(rl.EXTERNAL)
 async def get_pokemon_card(
+    request: Request,
     id_or_name: IdOrName,
     _: CurrentUser,
     pokeapi: PokeAPIDep,

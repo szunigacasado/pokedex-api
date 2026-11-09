@@ -64,6 +64,9 @@ def get_current_user(
             "Token válido de un usuario inexistente o inactivo (id=%s)", claims["user_id"]
         )
         raise _unauthorized()
+
+    # El rate limiting usa este dato para limitar por usuario y no por IP.
+    request.state.user_id = user.id
     return user
 
 

@@ -11,8 +11,10 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, FastAPI, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
@@ -20,6 +22,7 @@ from sqlmodel import Session
 from app.config import get_settings
 from app.database import create_db_and_tables, get_session
 from app.errors import register_exception_handlers
+from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.routers import auth, pokedex, pokemon, teams
 from app.services.pokeapi_service import PokeAPIService
 
@@ -84,6 +87,29 @@ def create_app() -> FastAPI:
         return HealthStatus(status="ok", database="ok")
 
     register_exception_handlers(app)
+
+    # Rate limiting (límites por endpoint en app/rate_limit.py)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+    # CORS: solo los orígenes configurados pueden llamar a la API desde un navegador.
+    # allow_credentials=False porque la autenticación va en la cabecera Authorization,
+    # no en cookies: no hace falta que el navegador envíe credenciales a otros orígenes.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
+        expose_headers=[
+            "Content-Disposition",
+            "Retry-After",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+            "X-RateLimit-Reset",
+        ],
+        max_age=settings.cors_max_age_seconds,
+    )
 
     api_v1 = APIRouter(prefix="/api/v1")
     api_v1.include_router(auth.router)
