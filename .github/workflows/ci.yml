@@ -160,8 +160,8 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::Registro, login y ruta protegida"
-          api -X POST https://localhost/api/v1/auth/register -H 'Content-Type: application/json'             -d '{"username":"ci","email":"ci@kanto.dev","password":"Pikachu123"}'
-          token=$(api -X POST https://localhost/api/v1/auth/login             -d 'username=ci&password=Pikachu123' | jq -r .access_token)
+          api -X POST https://localhost/api/v1/auth/register -H 'Content-Type: application/json'             -d '{"username":"ci-bot","email":"ci-bot@kanto.dev","password":"Pikachu123"}'
+          token=$(api -X POST https://localhost/api/v1/auth/login             -d 'username=ci-bot&password=Pikachu123' | jq -r .access_token)
           api https://localhost/api/v1/auth/me -H "Authorization: Bearer $token"
           echo "::endgroup::"
 
@@ -170,7 +170,7 @@ jobs:
           echo "::endgroup::"
 
           echo "::group::La API ve la IP real y no acepta X-Forwarded-For falsificado"
-          curl -s -o /dev/null --cacert caddy-root.crt -H 'X-Forwarded-For: 203.0.113.66'             -X POST https://localhost/api/v1/auth/login -d 'username=ci&password=incorrecta'
+          curl -s -o /dev/null --cacert caddy-root.crt -H 'X-Forwarded-For: 203.0.113.66'             -X POST https://localhost/api/v1/auth/login -d 'username=ci-bot&password=incorrecta'
           logs=$(docker compose logs api)
           grep 'Login fallido desde' <<<"$logs"
           # Ni la IP de Caddy (172.30.0.2) ni la que ha escrito el cliente
