@@ -149,6 +149,30 @@ curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
 curl http://127.0.0.1:8000/api/v1/auth/me -H "Authorization: Bearer <access_token>"
 ```
 
+### Pokémon (`/api/v1/pokemon`): proxy a PokeAPI
+
+| Método | Ruta | Auth | Descripción |
+|---|---|:-:|---|
+| `GET` | `/search?name=&limit=20&offset=0` | 🔒 | Busca por nombre (subcadena, sin distinguir mayúsculas). Devuelve `{id, name, sprite, types}`. |
+| `GET` | `/{id_or_name}` | 🔒 | Detalle con estadísticas, habilidades, tipos, sprites y especie (descripción y categoría en español, generación, legendario o mítico). |
+| `GET` | `/{id_or_name}/card?format=png\|pdf` | 🔒 | Descarga la ficha del Pokémon como archivo. |
+
+| Situación | Respuesta |
+|---|---|
+| El Pokémon no existe | `404` |
+| Identificador malformado (`pika_chu`, `0`, `'or 1=1`…) | `422`, sin llegar a llamar a PokeAPI |
+| PokeAPI caída y sin datos de respaldo | `503` con `Retry-After` |
+| PokeAPI responde algo inesperado | `502` |
+
+**Ficha descargable.** Se dibuja con Pillow como carta coleccionable de 600 x 840 px:
+- Color según el tipo, con nombre, categoría, tipos y habilidades **en español**.
+- Las seis estadísticas con barras.
+- Descripción de la Pokédex y marca de legendario o mítico.
+
+La ilustración solo se descarga del repositorio oficial de sprites de PokeAPI (lista de dominios permitidos contra SSRF, solo HTTPS y 2 MB como máximo). El dibujo se hace en un hilo aparte para no bloquear el servidor. La fuente es [Nunito](app/assets/fonts/OFL.txt), con licencia SIL Open Font License, porque la fuente por defecto de Pillow no tiene acentos.
+
+<p align="center"><img src="docs/img/ficha-gengar.png" alt="Ficha de Gengar generada por la API" width="300"></p>
+
 ## Decisiones de Diseño
 
 ### Rate limiting
