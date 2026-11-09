@@ -173,6 +173,38 @@ La ilustración solo se descarga del repositorio oficial de sprites de PokeAPI (
 
 <p align="center"><img src="docs/img/ficha-gengar.png" alt="Ficha de Gengar generada por la API" width="300"></p>
 
+### Pokédex personal (`/api/v1/pokedex`)
+
+| Método | Ruta | Auth | Descripción |
+|---|---|:-:|---|
+| `POST` | `/` | 🔒 | Añade un Pokémon. Comprueba en PokeAPI que existe y copia su nombre, sprite y tipos. `409` si ya estaba. |
+| `GET` | `/?captured=&favorite=&sort=&order=&limit=&offset=` | 🔒 | Lista paginada con `count` total. `sort`: `pokemon_id`, `capture_date`, `pokemon_name` o `created_at`; `order`: `asc` o `desc`. |
+| `GET` | `/{entry_id}` | 🔒 | Una entrada. |
+| `PATCH` | `/{entry_id}` | 🔒 | Actualización parcial: solo cambian los campos enviados. |
+| `DELETE` | `/{entry_id}` | 🔒 | Elimina la entrada (y la saca de los equipos donde estuviera). `204`. |
+| `GET` | `/export?format=csv\|pdf&captured=&favorite=` | 🔒 | Descarga la Pokédex filtrada como CSV o PDF. |
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/pokedex \
+  -H "Authorization: Bearer <access_token>" -H "Content-Type: application/json" \
+  -d '{"pokemon_id": 25, "nickname": "Sparky", "is_captured": true}'
+```
+
+**Reglas de negocio:**
+- **Autorización por propietario:** todas las consultas filtran por el usuario del token. Una entrada de otro usuario devuelve `404` y no `403`, para no revelar que existe (OWASP API1, *Broken Object Level Authorization*).
+- **Sin duplicados:** se comprueba antes de insertar y, además, la restricción `UNIQUE(owner_id, pokemon_id)` de la base de datos cubre el caso de dos peticiones simultáneas. Hay un test que simula esa carrera.
+- **Coherencia de la captura:**
+  - Capturado sin fecha → se usa la fecha actual.
+  - Descapturar → se borra la fecha.
+  - No se admiten fechas futuras ni fecha de captura sin estar capturado.
+  - Las fechas sin zona horaria se interpretan como UTC.
+- **Textos limpios:** se quitan los espacios sobrantes y un apodo o una nota vacíos se guardan como `null`.
+- **Datos copiados de PokeAPI:** la Pokédex, sus filtros y sus estadísticas funcionan aunque PokeAPI se caiga.
+
+**Exportación:**
+- **CSV:** estándar RFC 4180, en UTF-8 con BOM para que Excel muestre los acentos. Está protegido contra la **inyección de fórmulas**: un apodo como `=HYPERLINK(...)` se guarda como texto.
+- **PDF:** con ReportLab. Incluye un resumen (total, capturados, favoritos), una tabla con el sprite de cada Pokémon, los tipos en su color, la cabecera repetida en cada página y la paginación.
+
 ## Decisiones de Diseño
 
 ### Rate limiting
