@@ -158,7 +158,45 @@ _Se completa en `features/rate-limiting-cors`._
 _Se completa en `features/api-v2`._
 
 ### Otras decisiones
-_Se completa durante el desarrollo._
+
+#### Cliente de PokeAPI resiliente
+
+`app/services/pokeapi_service.py` es la única pieza que habla con PokeAPI. Al resto de la aplicación le entrega modelos propios (`PokemonDetail`, `PokemonSpecies`…) con solo los campos útiles: de los cientos que devuelve PokeAPI por Pokémon, se quedan unos 20. También le entrega excepciones de dominio (`PokemonNotFoundError`, `PokeAPIUnavailableError`), nunca errores de `httpx`.
+
+Una API externa gratuita puede ir lenta, fallar o caerse, así que el cliente se protege en capas:
+
+```mermaid
+flowchart LR
+    A[Petición] --> V{¿Parámetro válido?}
+    V -- no --> E422[Error de validación<br/>sin llamar a PokeAPI]
+    V -- sí --> C{¿En caché?}
+    C -- sí --> R[Respuesta]
+    C -- no --> B{¿Circuito abierto?}
+    B -- sí --> F
+    B -- no --> H[GET a PokeAPI<br/>timeout 5 s]
+    H -- 200 --> G[Guardar en caché] --> R
+    H -- 404 --> N[No encontrado<br/>se cachea 5 min]
+    H -- red, 429, 5xx --> T{¿Quedan reintentos?}
+    T -- sí, backoff + jitter --> H
+    T -- no --> F{¿Hay datos de respaldo?}
+    F -- sí --> R
+    F -- no --> U[Servicio no disponible]
+```
+
+| Capa | Detalle |
+|---|---|
+| **Validación** | IDs entre 1 y 100 000 y nombres `[a-z0-9-]`. Se rechazan `../`, `?` y espacios antes de construir la URL externa. |
+| **Timeout** | 5 s por petición. Una PokeAPI lenta no bloquea los workers de la API. |
+| **Límite de reintentos** | 3 como máximo, solo ante errores transitorios (red, *timeout*, 429, 5xx). *Backoff* exponencial con *full jitter*: el azar evita que muchos clientes reintenten a la vez. Se respeta `Retry-After`, con un tope de 10 s. Un 404 no se reintenta. |
+| **Circuit breaker** | Tras 5 fallos seguidos se deja de llamar durante 30 s: las peticiones fallan al instante en lugar de esperar *timeouts*. Después se deja pasar una petición de prueba. |
+| **Caché** | En memoria, LRU, 1 h por respuesta y 5 min para los 404. El índice de nombres que usa la búsqueda se cachea 24 h. |
+| **Concurrencia** | Como mucho 10 peticiones simultáneas, para no abusar de un servicio gratuito. |
+| **Datos de respaldo** | [`app/data/pokemon_fallback.json`](app/data/pokemon_fallback.json) con los 151 Pokémon originales y su descripción en español. Se usa solo si PokeAPI no responde. Se regenera con `uv run python -m scripts.generate_fallback_data`. |
+| **Logging** | Cada llamada queda registrada con su URL, código y duración. Los reintentos y el uso de datos de respaldo, como *warning*. |
+
+El cliente se crea **una vez** al arrancar (`lifespan`) y se comparte entre peticiones: reutiliza conexiones HTTP y la caché sirve a todos los usuarios.
+
+**Diferencia con la plantilla del enunciado:** la plantilla lanza `HTTPException` desde el servicio. Aquí el servicio lanza excepciones propias y la API las traduce a códigos HTTP. Así el servicio no depende de FastAPI y se puede reutilizar desde un script, como el que genera los datos de respaldo.
 
 ## Decisiones de Seguridad
 
