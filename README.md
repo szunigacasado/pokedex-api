@@ -236,6 +236,40 @@ Las rachas dependen de **dónde empieza cada día**: una captura a las 23:30 UTC
 - **CSV:** estándar RFC 4180, en UTF-8 con BOM para que Excel muestre los acentos. Está protegido contra la **inyección de fórmulas**: un apodo como `=HYPERLINK(...)` se guarda como texto.
 - **PDF:** con ReportLab. Incluye un resumen (total, capturados, favoritos), una tabla con el sprite de cada Pokémon, los tipos en su color, la cabecera repetida en cada página y la paginación.
 
+### Equipos de batalla (`/api/v1/teams`)
+
+| Método | Ruta | Auth | Descripción |
+|---|---|:-:|---|
+| `POST` | `/` | 🔒 | Crea un equipo: `{"name", "description", "pokemon_ids": [1, 4, 7, 25, 133, 143]}`. |
+| `GET` | `/` | 🔒 | Lista mis equipos con sus miembros (nombre, apodo, tipos, sprite). |
+| `GET` | `/{team_id}` | 🔒 | Un equipo. |
+| `PUT` | `/{team_id}` | 🔒 | Actualiza nombre, descripción y miembros. Los campos omitidos se conservan y `pokemon_ids` sustituye la lista completa, en ese orden. |
+| `DELETE` | `/{team_id}` | 🔒 | Elimina el equipo; los Pokémon siguen en la Pokédex. `204`. |
+| `GET` | `/{team_id}/analysis` | 🔒 | Estadísticas combinadas y cobertura de tipos en JSON. |
+| `GET` | `/{team_id}/export` | 🔒 | **PDF** del equipo. |
+
+**Reglas:**
+- Entre 1 y **6** Pokémon, sin repetir y todos de **tu Pokédex**. Si falta alguno, el `422` dice cuáles.
+- El orden de `pokemon_ids` es la posición.
+- Los nombres de equipo son únicos por usuario sin distinguir mayúsculas («Equipo Élite» = «EQUIPO ÉLITE»). La comparación se hace con `casefold()` porque el `lower()` de SQLite solo convierte letras ASCII.
+- Como mucho 20 equipos por usuario.
+- Los equipos de otros usuarios responden `404`.
+- Si se libera un Pokémon de la Pokédex, sale también de sus equipos.
+
+**Análisis del equipo.** Está en [`app/services/team_analysis.py`](app/services/team_analysis.py), son funciones puras y no inventa nada:
+- **Estadísticas combinadas:** total y media de cada estadística base y total base del equipo.
+- **Cobertura defensiva:** con la **tabla oficial de efectividades** (18 × 18, generación 6 en adelante), cuántos miembros son débiles, resisten o son inmunes a cada tipo de ataque. Un Pokémon de doble tipo multiplica: Charizard recibe x4 de Roca y x0 de Tierra.
+- **Debilidades compartidas:** tipos a los que es débil al menos la mitad del equipo sin compensarlo con resistencias.
+- **Cobertura ofensiva:** tipos a los que el equipo golpea de forma supereficaz con sus propios tipos.
+- **Conclusiones** en español generadas con reglas: punto fuerte y débil, el más rápido, debilidades y huecos libres.
+
+**PDF del equipo,** en tres páginas:
+1. Nombre y descripción, tabla de miembros, estadísticas combinadas con un **gráfico radar** de las medias (escala fija para poder comparar equipos) y las conclusiones.
+2. Las **fichas** de los Pokémon: las mismas cartas de `/pokemon/{id}/card`.
+3. **Cobertura de tipos:** el multiplicador que recibiría cada miembro de cada tipo de ataque, coloreado (rojo para debilidades, verde para resistencias, gris para inmunidades).
+
+El nombre del archivo se genera en ASCII (`equipo-equipo-elite-20261109.pdf`), porque las cabeceras HTTP no admiten cualquier carácter y un nombre con emojis rompería la descarga.
+
 ## Decisiones de Diseño
 
 ### Rate limiting

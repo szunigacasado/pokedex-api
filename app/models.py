@@ -471,23 +471,79 @@ class TeamMember(SQLModel, table=True):
     entry: PokedexEntry = Relationship()
 
 
+def _check_team_ids(ids: list[int] | None) -> list[int] | None:
+    if ids is None:
+        return None
+    if any(i < 1 for i in ids):
+        raise ValueError("Los IDs de Pokémon deben ser positivos.")
+    if len(set(ids)) != len(ids):
+        raise ValueError("Un Pokémon no puede aparecer dos veces en el mismo equipo.")
+    return ids
+
+
 class TeamCreate(TeamBase):
     pokemon_ids: list[int] = Field(
         min_length=1,
         max_length=MAX_TEAM_SIZE,
-        description="IDs de PokeAPI de Pokémon que ya están en la Pokédex del usuario.",
+        description="IDs de PokeAPI (como mucho 6, sin repetir) de Pokémon que ya están en la "
+        "Pokédex del usuario. El orden de la lista es la posición en el equipo.",
+        schema_extra={"examples": [[1, 4, 7, 25, 133, 143]]},
     )
+
+    @field_validator("name")
+    @classmethod
+    def _clean_name(cls, value: str) -> str:
+        cleaned = _clean_optional_text(value)
+        if not cleaned:
+            raise ValueError("El nombre del equipo no puede estar vacío.")
+        return cleaned
+
+    @field_validator("description")
+    @classmethod
+    def _clean_description(cls, value: str | None) -> str | None:
+        return _clean_optional_text(value)
+
+    @field_validator("pokemon_ids")
+    @classmethod
+    def _unique_ids(cls, value: list[int]) -> list[int]:
+        return _check_team_ids(value)  # type: ignore[return-value]
 
 
 class TeamUpdate(SQLModel):
+    """Actualización del equipo. Los campos que no se envían se conservan; si se envía
+    ``pokemon_ids``, sustituye a la lista completa de miembros."""
+
     name: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = Field(default=None, max_length=500)
     pokemon_ids: list[int] | None = Field(default=None, min_length=1, max_length=MAX_TEAM_SIZE)
+
+    @field_validator("name")
+    @classmethod
+    def _clean_name(cls, value: str | None) -> str | None:
+        cleaned = _clean_optional_text(value)
+        if value is not None and not cleaned:
+            raise ValueError("El nombre del equipo no puede estar vacío.")
+        return cleaned
+
+    @field_validator("description")
+    @classmethod
+    def _clean_description(cls, value: str | None) -> str | None:
+        return _clean_optional_text(value)
+
+    @field_validator("pokemon_ids")
+    @classmethod
+    def _unique_ids(cls, value: list[int] | None) -> list[int] | None:
+        return _check_team_ids(value)
 
 
 class TeamMemberRead(SQLModel):
     position: int
     pokedex_entry_id: int
+    pokemon_id: int
+    pokemon_name: str
+    nickname: str | None
+    sprite: str | None
+    types: list[str]
 
 
 class TeamRead(TeamBase):
@@ -495,3 +551,52 @@ class TeamRead(TeamBase):
     created_at: datetime
     updated_at: datetime
     members: list[TeamMemberRead] = []
+
+
+# ── Análisis del equipo ──────────────────────────────────────
+class StatBlock(SQLModel):
+    hp: float
+    attack: float
+    defense: float
+    special_attack: float
+    special_defense: float
+    speed: float
+
+
+class TeamCombinedStats(SQLModel):
+    total: StatBlock = Field(description="Suma de cada estadística base del equipo.")
+    average: StatBlock = Field(description="Media por miembro.")
+    base_stat_total: int = Field(description="Suma de todas las estadísticas de todos.")
+    average_base_stat_total: float
+
+
+class TypeMatchup(SQLModel):
+    type: str = Field(description="Tipo del ataque recibido.")
+    weak: int = Field(description="Miembros que reciben daño supereficaz (x2 o x4).")
+    resist: int = Field(description="Miembros que reciben daño reducido (x0,5 o x0,25).")
+    immune: int = Field(description="Miembros inmunes (x0).")
+    multipliers: list[float] = Field(description="Multiplicador para cada miembro, en orden.")
+
+
+class TeamMemberAnalysis(SQLModel):
+    pokemon_id: int
+    name: str
+    types: list[str]
+    stats: StatBlock
+    base_stat_total: int
+
+
+class TeamAnalysis(SQLModel):
+    team_id: int
+    name: str
+    members: list[TeamMemberAnalysis]
+    combined: TeamCombinedStats
+    defensive: list[TypeMatchup] = Field(description="De más peligroso a menos.")
+    shared_weaknesses: list[str] = Field(
+        description="Tipos a los que es débil al menos la mitad del equipo sin compensarlo."
+    )
+    super_effective_against: list[str] = Field(
+        description="Tipos que el equipo golpea de forma supereficaz con sus propios tipos."
+    )
+    not_covered: list[str]
+    highlights: list[str] = Field(description="Conclusiones en español calculadas con reglas.")
