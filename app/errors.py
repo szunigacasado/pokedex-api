@@ -7,6 +7,7 @@ código y qué mensaje recibe el cliente. Los mensajes no incluyen detalles inte
 import logging
 
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
@@ -53,9 +54,32 @@ async def _bad_gateway(request: Request, exc: Exception) -> JSONResponse:
     )
 
 
+async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """422 de validación sin repetir lo que envió el cliente.
+
+    FastAPI incluye por defecto el valor recibido (``input``) en cada error. Si lo que
+    falla es la contraseña, la respuesta la repetiría, y podría acabar en logs de proxies o
+    en herramientas de depuración. Aquí solo se devuelve qué campo falla y por qué.
+    """
+    errors = [
+        {"type": e.get("type"), "loc": list(e.get("loc", ())), "msg": e.get("msg")}
+        for e in exc.errors()
+    ]
+    logger.warning(
+        "Error de validación en %s %s: %s",
+        request.method,
+        request.url.path,
+        "; ".join(f"{'.'.join(str(p) for p in err['loc'])} ({err['type']})" for err in errors),
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": errors}
+    )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     # Starlette elige el manejador de la clase más específica, así que el orden de
     # registro no importa: PokeAPIError solo captura lo que no encaja en las demás.
+    app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(PokemonNotFoundError, _not_found)
     app.add_exception_handler(InvalidIdentifierError, _invalid)
     app.add_exception_handler(PokeAPIUnavailableError, _unavailable)
