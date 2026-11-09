@@ -273,7 +273,53 @@ El nombre del archivo se genera en ASCII (`equipo-equipo-elite-20261109.pdf`), p
 ## Decisiones de Diseño
 
 ### Rate limiting
-_Se completa en `features/rate-limiting-cors`._
+
+Implementado con **slowapi** en [`app/rate_limit.py`](app/rate_limit.py). Usa una ventana deslizante (*moving window*) y los límites se configuran con variables `RATE_LIMIT_*`.
+
+| Tipo de endpoint | Límite | Clave | Endpoints |
+|---|---|---|---|
+| Registro | **5/hora** | IP | `POST /auth/register` |
+| Login | **10/minuto** | IP | `POST /auth/login` |
+| Tokens | 30/minuto | IP | `POST /auth/refresh`, `/auth/logout` |
+| Llaman a PokeAPI | **30/minuto** | usuario | `/pokemon/*`, `POST /pokedex`, `/teams/{id}/analysis` |
+| Exportaciones | 10/minuto | usuario | `/pokedex/export`, `/teams/{id}/export` |
+| Resto de autenticados | **100/minuto** | usuario | Pokédex, estadísticas, equipos, `/auth/me` |
+
+**¿Por qué límites diferentes?** Cada tipo de endpoint tiene un coste y un riesgo distintos:
+- **Registro (5/hora):** es el más estricto porque una persona real se registra una vez. Un límite bajo frena la creación masiva de cuentas falsas (*bots*, *spam*) sin molestar a nadie.
+- **Login (10/minuto):** permite equivocarse de contraseña varias veces, pero hace inviable probar miles de contraseñas por fuerza bruta. Además hay un bloqueo de la cuenta tras 5 fallos, porque el límite por IP se puede esquivar cambiando de IP y el bloqueo por cuenta no.
+- **Llamadas a PokeAPI (30/minuto):** cada petición nuestra genera peticiones a un servicio **externo y gratuito**. Si no se limitan, un solo cliente podría hacer que PokeAPI nos bloquease a todos, y además consumen tiempo y conexiones.
+- **Exportaciones (10/minuto):** generar un PDF con imágenes consume CPU. Es la operación más cara para nuestro servidor.
+- **Resto (100/minuto):** son consultas baratas a nuestra base de datos. El límite es generoso para que una aplicación cliente funcione con fluidez, pero corta los bucles descontrolados.
+
+**¿Cómo protege esto la API?**
+- **Contra la fuerza bruta** de contraseñas en el login, junto con el bloqueo de cuenta.
+- **Contra la denegación de servicio** por agotamiento de recursos (OWASP API4, *Unrestricted Resource Consumption*). Ningún cliente puede acaparar la CPU, la base de datos o las conexiones a PokeAPI.
+- **Contra el abuso del servicio externo:** el límite, junto con la caché y el *circuit breaker* del cliente de PokeAPI, nos mantiene muy por debajo de lo que PokeAPI tolera.
+- **Con equidad entre usuarios:** en los endpoints autenticados el límite es **por usuario y no por IP**. Varios estudiantes detrás de la misma red no se quitan el cupo entre ellos, y un usuario no puede saltarse su límite cambiando de IP. En los públicos, donde aún no se sabe quién es, se limita por IP.
+
+**¿Qué pasa si un usuario excede el límite?**
+- Recibe **`429 Too Many Requests`** con un mensaje en español y el límite que ha superado:
+  ```json
+  {"detail": "Demasiadas peticiones. Espera un poco antes de volver a intentarlo.", "limit": "10 per 1 minute"}
+  ```
+- La cabecera **`Retry-After`** indica cuántos segundos debe esperar. Todas las respuestas, también las correctas, llevan **`X-RateLimit-Limit`**, **`X-RateLimit-Remaining`** y **`X-RateLimit-Reset`**, para que un cliente bien hecho se regule solo antes de llegar al límite.
+- La petición **no se procesa**: no consume base de datos ni llamadas a PokeAPI.
+- El exceso **queda registrado** en el log (`Rate limit superado: POST /api/v1/auth/login clave=ip:…`) para detectar abusos.
+- Cuando pasa la ventana de tiempo, vuelve a poder hacer peticiones con normalidad. No es un bloqueo permanente.
+
+Los contadores se guardan en memoria, lo que basta para un único proceso. Con varias réplicas se usaría Redis (`RATE_LIMIT_STORAGE_URI=redis://…`) para que todas compartan los contadores.
+
+### CORS
+
+Solo los orígenes de `CORS_ORIGINS` pueden llamar a la API desde un navegador. Por defecto son los servidores de desarrollo de React (`:3000`) y Vite (`:5173`).
+- **Métodos** limitados a los que usa la API y **cabeceras** limitadas a `Authorization` y `Content-Type`.
+- **`max_age`** de 1 hora: el navegador no repite la comprobación previa (*preflight*) en cada petición.
+- **`allow_credentials=False`:** la autenticación viaja en la cabecera `Authorization` y no en cookies, así que no hace falta que el navegador envíe credenciales a otros orígenes. Es el principio de mínimo privilegio.
+- **Cabeceras expuestas** al JavaScript del cliente: `Content-Disposition` (nombre de los archivos descargables), `Retry-After` y `X-RateLimit-*`.
+- **`*` está prohibido en producción:** la aplicación no arranca con `CORS_ORIGINS=*` y `ENVIRONMENT=production`.
+
+CORS no es un mecanismo de autenticación: solo impide que una web ajena lea las respuestas desde el navegador de una víctima. Las peticiones desde `curl` o desde un servidor no pasan por CORS, y para eso están el JWT y el rate limiting.
 
 ### Versionado
 _Se completa en `features/api-v2`._
