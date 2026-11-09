@@ -18,6 +18,11 @@ os.environ.setdefault("BCRYPT_ROUNDS", "4")
 os.environ.setdefault("LOG_FILE", "")
 # TestClient envía Host: testserver
 os.environ.setdefault("ALLOWED_HOSTS", "testserver,localhost,127.0.0.1")
+# Las credenciales de servicios externos del .env local no deben influir en los tests: las
+# variables de entorno tienen prioridad sobre el .env, así que se fuerzan a vacío.
+os.environ["GOOGLE_CLIENT_ID"] = ""
+os.environ["GOOGLE_CLIENT_SECRET"] = ""
+os.environ["GROQ_API_KEY"] = ""
 
 from collections.abc import Iterator
 

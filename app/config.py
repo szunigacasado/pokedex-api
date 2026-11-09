@@ -84,6 +84,26 @@ class Settings(BaseSettings):
     def google_enabled(self) -> bool:
         return bool(self.google_client_id and self.google_client_secret)
 
+    # ── IA: «Profesor Oak» con Groq ──────────────────────────
+    # Sin GROQ_API_KEY, los endpoints de IA responden igualmente usando reglas.
+    groq_api_key: SecretStr | None = None
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    # Se prueban en orden: si el primero falla o se agota su cuota, se usa el siguiente.
+    groq_models: Annotated[list[str], NoDecode] = ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    ai_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+    ai_cache_ttl_seconds: int = Field(default=3600, ge=0)
+
+    @field_validator("groq_models", mode="before")
+    @classmethod
+    def _split_models(cls, value: object) -> object:
+        if isinstance(value, str):
+            return [m.strip() for m in value.split(",") if m.strip()]
+        return value
+
+    @property
+    def ai_enabled(self) -> bool:
+        return bool(self.groq_api_key and self.groq_api_key.get_secret_value())
+
     # ── Cliente de PokeAPI ───────────────────────────────────
     pokeapi_base_url: str = "https://pokeapi.co/api/v2"
     pokeapi_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
@@ -109,6 +129,7 @@ class Settings(BaseSettings):
     rate_limit_external: str = "30/minute"
     rate_limit_export: str = "10/minute"
     rate_limit_default: str = "100/minute"
+    rate_limit_ai: str = "10/minute"
 
     # ── CORS ─────────────────────────────────────────────────
     # Lista separada por comas o JSON. Nunca "*" en producción.
