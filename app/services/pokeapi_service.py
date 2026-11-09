@@ -340,6 +340,21 @@ class FallbackData:
             for pid, p in sorted(self._raw["pokemon"].items(), key=lambda kv: int(kv[0]))
         ]
 
+    def all_pokemon(self) -> list[PokemonDetail]:
+        """Los 151 Pokémon originales con sus estadísticas, en orden de Pokédex."""
+        return [
+            PokemonDetail.model_validate(p)
+            for _, p in sorted(self._raw["pokemon"].items(), key=lambda kv: int(kv[0]))
+        ]
+
+    def special_ids(self) -> tuple[set[int], set[int]]:
+        """IDs de los Pokémon legendarios y de los míticos."""
+        species = self._raw["species"].values()
+        return (
+            {s["id"] for s in species if s.get("is_legendary")},
+            {s["id"] for s in species if s.get("is_mythical")},
+        )
+
     def by_type(self, type_name: str) -> list[NamedResource]:
         return [
             NamedResource(id=int(pid), name=p["name"])
