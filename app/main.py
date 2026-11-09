@@ -29,8 +29,9 @@ from app.errors import register_exception_handlers
 from app.logging_config import configure_logging
 from app.middleware import RequestLoggingMiddleware
 from app.rate_limit import limiter, rate_limit_exceeded_handler
-from app.routers import auth, pokedex, pokemon, teams, v2
+from app.routers import auth, oauth, pokedex, pokemon, teams, v2
 from app.security_middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
+from app.services.google_oauth import GoogleOAuthClient
 from app.services.pokeapi_service import PokeAPIService
 
 logger = logging.getLogger("pokedex_api")
@@ -59,12 +60,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Un único cliente HTTP para toda la aplicación: reutiliza conexiones (keep-alive)
     # y comparte caché y circuit breaker entre peticiones.
     app.state.pokeapi = PokeAPIService()
+    app.state.google = GoogleOAuthClient()
     # No se registran versiones, rutas del sistema ni secretos: solo el entorno.
     logger.info("Aplicación iniciada (entorno: %s)", settings.environment)
     try:
         yield
     finally:
         await app.state.pokeapi.close()
+        await app.state.google.close()
         logger.info("Aplicación detenida")
 
 
@@ -147,6 +150,7 @@ def create_app() -> FastAPI:
 
     api_v1 = APIRouter(prefix="/api/v1")
     api_v1.include_router(auth.router)
+    api_v1.include_router(oauth.router)
     api_v1.include_router(pokemon.router)
     api_v1.include_router(pokedex.router)
     api_v1.include_router(teams.router)

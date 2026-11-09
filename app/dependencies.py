@@ -4,7 +4,7 @@ import logging
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordBearer
 from sqlmodel import Session
 
 from app.auth import InvalidTokenError, decode_token
@@ -17,6 +17,12 @@ logger = logging.getLogger("pokedex_api.auth")
 # auto_error=False: la respuesta 401 la construimos nosotros, siempre con el mismo
 # mensaje, para no dar pistas de por qué se ha rechazado el token.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+# Segundo esquema solo para Swagger: permite pegar directamente un access token (por
+# ejemplo, el obtenido con el login de Google). Ambos leen la misma cabecera Authorization.
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    description="Pega un access token, por ejemplo el obtenido con /auth/google/login.",
+)
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
@@ -41,12 +47,14 @@ def get_current_user(
     request: Request,
     session: SessionDep,
     token: Annotated[str | None, Depends(oauth2_scheme)],
+    bearer: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> User:
     """Devuelve el usuario dueño del access token, o responde 401.
 
     Además de validar el token se comprueba contra la base de datos que el usuario
     sigue existiendo, está activo y conserva el mismo nombre que figura en el token.
     """
+    token = token or (bearer.credentials if bearer else None)
     if not token:
         raise _unauthorized()
 
