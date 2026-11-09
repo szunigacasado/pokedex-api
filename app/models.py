@@ -13,18 +13,56 @@ base de datos (restricciones ``UNIQUE`` y ``CHECK``, claves foráneas con ``ON D
 CASCADE``), para que se cumplan aunque algún día se escriba en ella por otra vía.
 """
 
+import re
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, Column, UniqueConstraint
+from pydantic import field_validator, model_validator
+from sqlalchemy import JSON, CheckConstraint, Column, DateTime, Dialect, UniqueConstraint
+from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field, Relationship, SQLModel
 
 #: Tamaño máximo de un equipo de batalla.
 MAX_TEAM_SIZE = 6
 
+#: bcrypt solo tiene en cuenta los primeros 72 *bytes* de la contraseña e ignora el
+#: resto sin avisar. Se rechazan las contraseñas más largas para que no haya sorpresas.
+BCRYPT_MAX_BYTES = 72
+PASSWORD_MIN_LENGTH = 8
+
+EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$")
+USERNAME_PATTERN = re.compile(r"^[a-z0-9_.-]{3,50}$")
+
 
 def utc_now() -> datetime:
     """Fecha y hora actual en UTC y con zona horaria (``datetime.utcnow`` está obsoleto)."""
     return datetime.now(UTC)
+
+
+class UTCDateTime(TypeDecorator[datetime]):
+    """Columna de fecha que siempre se guarda y se devuelve en UTC con zona horaria.
+
+    SQLite no guarda la zona horaria y devuelve fechas *naive*; compararlas con fechas
+    *aware* lanza ``TypeError``. Este tipo normaliza ambos sentidos para que el resto
+    del código trabaje siempre con fechas UTC con zona horaria.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    def process_result_value(self, value: Any, dialect: Dialect) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
 
 # ═════════════════════════════════════════════════════════════
@@ -41,16 +79,64 @@ class User(UserBase, table=True):
     id: int | None = Field(default=None, primary_key=True)
     hashed_password: str
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
+
+    # Protección contra fuerza bruta: tras varios fallos seguidos la cuenta se bloquea
+    # temporalmente, aunque el atacante cambie de IP.
+    failed_login_attempts: int = Field(default=0, ge=0)
+    locked_until: datetime | None = Field(default=None, sa_type=UTCDateTime)
 
     pokedex_entries: list["PokedexEntry"] = Relationship(
         back_populates="owner", cascade_delete=True
     )
     teams: list["Team"] = Relationship(back_populates="trainer", cascade_delete=True)
+    refresh_tokens: list["RefreshToken"] = Relationship(back_populates="user", cascade_delete=True)
 
 
 class UserCreate(UserBase):
-    password: str = Field(min_length=8, max_length=72)
+    """Datos de registro, con la política de contraseñas del enunciado."""
+
+    password: str = Field(
+        min_length=PASSWORD_MIN_LENGTH,
+        max_length=BCRYPT_MAX_BYTES,
+        description="Mínimo 8 caracteres, con al menos una mayúscula y un número.",
+    )
+
+    @field_validator("username")
+    @classmethod
+    def _normalize_username(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not USERNAME_PATTERN.fullmatch(value):
+            raise ValueError(
+                "El nombre de usuario solo admite letras, números, '.', '_' y '-' "
+                "(entre 3 y 50 caracteres)."
+            )
+        return value
+
+    @field_validator("email")
+    @classmethod
+    def _validate_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not EMAIL_PATTERN.fullmatch(value):
+            raise ValueError("El email no tiene un formato válido.")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password_policy(cls, value: str) -> str:
+        if not any(char.isupper() for char in value):
+            raise ValueError("La contraseña debe contener al menos una letra mayúscula.")
+        if not any(char.isdigit() for char in value):
+            raise ValueError("La contraseña debe contener al menos un número.")
+        if len(value.encode("utf-8")) > BCRYPT_MAX_BYTES:
+            raise ValueError(f"La contraseña no puede ocupar más de {BCRYPT_MAX_BYTES} bytes.")
+        return value
+
+    @model_validator(mode="after")
+    def _password_must_not_contain_username(self) -> "UserCreate":
+        if self.username in self.password.lower():
+            raise ValueError("La contraseña no puede contener el nombre de usuario.")
+        return self
 
 
 class UserRead(UserBase):
@@ -60,11 +146,44 @@ class UserRead(UserBase):
 
 
 # ═════════════════════════════════════════════════════════════
+#  Tokens de sesión
+# ═════════════════════════════════════════════════════════════
+class RefreshToken(SQLModel, table=True):
+    """Registro de cada refresh token emitido, para poder rotarlos y revocarlos.
+
+    Todos los tokens que nacen de un mismo inicio de sesión comparten ``family_id``. Si
+    alguien presenta un token ya usado, se asume que lo han robado y se revoca la familia
+    entera: tanto el atacante como el usuario legítimo tendrán que volver a entrar.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    jti: str = Field(max_length=64, unique=True, index=True)
+    family_id: str = Field(max_length=64, index=True)
+    user_id: int = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
+    expires_at: datetime = Field(sa_type=UTCDateTime)
+    revoked_at: datetime | None = Field(default=None, sa_type=UTCDateTime)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
+
+    user: User = Relationship(back_populates="refresh_tokens")
+
+
+class TokenPair(SQLModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"  # noqa: S105  (tipo de token de OAuth2, no una contraseña)
+    expires_in: int = Field(description="Segundos de validez del access token.")
+
+
+class RefreshRequest(SQLModel):
+    refresh_token: str = Field(min_length=1, max_length=4096)
+
+
+# ═════════════════════════════════════════════════════════════
 #  Pokédex
 # ═════════════════════════════════════════════════════════════
 class PokedexEntryBase(SQLModel):
     is_captured: bool = False
-    capture_date: datetime | None = None
+    capture_date: datetime | None = Field(default=None, sa_type=UTCDateTime)
     nickname: str | None = Field(default=None, max_length=50)
     notes: str | None = Field(default=None, max_length=500)
     favorite: bool = False
@@ -85,7 +204,7 @@ class PokedexEntry(PokedexEntryBase, table=True):
     pokemon_sprite: str | None = Field(default=None, max_length=500)
     pokemon_types: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
 
-    created_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
 
     owner: User = Relationship(back_populates="pokedex_entries")
 
@@ -130,8 +249,8 @@ class Team(TeamBase, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     trainer_id: int = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
-    created_at: datetime = Field(default_factory=utc_now)
-    updated_at: datetime = Field(default_factory=utc_now)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
+    updated_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
 
     trainer: User = Relationship(back_populates="teams")
     members: list["TeamMember"] = Relationship(
