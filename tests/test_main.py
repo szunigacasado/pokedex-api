@@ -47,6 +47,17 @@ def test_interactive_docs_are_available(client: TestClient) -> None:
     assert client.get("/docs").status_code == 200
 
 
+def test_pokeapi_client_lives_with_the_application(client: TestClient) -> None:
+    from app.dependencies import get_pokeapi
+    from app.services.pokeapi_service import PokeAPIService
+
+    service = client.app.state.pokeapi
+    request = MagicMock(app=client.app)
+
+    assert isinstance(service, PokeAPIService)
+    assert get_pokeapi(request) is service
+
+
 def test_get_session_yields_a_working_session() -> None:
     generator = get_session()
     session = next(generator)
