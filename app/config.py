@@ -36,7 +36,17 @@ class Settings(BaseSettings):
 
     app_name: str = "Pokédex API"
     environment: Environment = "development"
+
+    # ── Logging ──────────────────────────────────────────────
     log_level: LogLevel = "INFO"
+    log_format: Literal["text", "json"] = Field(
+        default="text", description="text para leerlo en consola; json para un agregador."
+    )
+    log_file: str = Field(
+        default="pokedex_api.log", description="Fichero de log; vacío para no escribir fichero."
+    )
+    log_max_bytes: int = Field(default=5 * 1024 * 1024, ge=1024)
+    log_backup_count: int = Field(default=3, ge=0, le=50)
 
     secret_key: SecretStr = Field(
         description="Clave para firmar los JWT. Obligatoria: no tiene valor por defecto.",
