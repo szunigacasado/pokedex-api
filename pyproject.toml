@@ -5,9 +5,13 @@ description = "API REST de Pokédex personal: cliente de PokeAPI y servidor Fast
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "bcrypt==4.0.1",
   "fastapi>=0.115",
   "httpx>=0.28",
+  "passlib[bcrypt]>=1.7.4",
   "pydantic-settings>=2.6",
+  "python-jose[cryptography]>=3.4.0",
+  "python-multipart>=0.0.18",
   "sqlmodel>=0.0.22",
   "uvicorn[standard]>=0.32",
 ]
