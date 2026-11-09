@@ -20,6 +20,7 @@ from sqlmodel import Session
 from app.config import get_settings
 from app.database import create_db_and_tables, get_session
 from app.routers import auth
+from app.services.pokeapi_service import PokeAPIService
 
 logger = logging.getLogger("pokedex_api")
 
@@ -37,10 +38,17 @@ class HealthStatus(BaseModel):
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     create_db_and_tables()
     logger.info("Base de datos inicializada")
-    yield
+
+    # Un único cliente HTTP para toda la aplicación: reutiliza conexiones (keep-alive)
+    # y comparte caché y circuit breaker entre peticiones.
+    app.state.pokeapi = PokeAPIService()
+    try:
+        yield
+    finally:
+        await app.state.pokeapi.close()
 
 
 def create_app() -> FastAPI:

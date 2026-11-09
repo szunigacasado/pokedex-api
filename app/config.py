@@ -55,6 +55,17 @@ class Settings(BaseSettings):
     max_failed_logins: int = Field(default=5, ge=1, le=20)
     lockout_minutes: int = Field(default=15, ge=1, le=24 * 60)
 
+    # ── Cliente de PokeAPI ───────────────────────────────────
+    pokeapi_base_url: str = "https://pokeapi.co/api/v2"
+    pokeapi_timeout_seconds: float = Field(default=5.0, gt=0, le=60)
+    pokeapi_max_retries: int = Field(default=3, ge=0, le=10)
+    pokeapi_backoff_seconds: float = Field(default=0.3, ge=0, le=10)
+    pokeapi_max_concurrency: int = Field(default=10, ge=1, le=50)
+    pokeapi_cache_ttl_seconds: int = Field(default=3600, ge=0)
+    pokeapi_cache_max_entries: int = Field(default=2048, ge=16)
+    pokeapi_breaker_threshold: int = Field(default=5, ge=1, le=100)
+    pokeapi_breaker_cooldown_seconds: float = Field(default=30.0, gt=0)
+
     @property
     def is_production(self) -> bool:
         return self.environment == "production"

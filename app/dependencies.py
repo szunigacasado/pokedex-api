@@ -10,6 +10,7 @@ from sqlmodel import Session
 from app.auth import InvalidTokenError, decode_token
 from app.database import get_session
 from app.models import User
+from app.services.pokeapi_service import PokeAPIService
 
 logger = logging.getLogger("pokedex_api.auth")
 
@@ -18,6 +19,14 @@ logger = logging.getLogger("pokedex_api.auth")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 SessionDep = Annotated[Session, Depends(get_session)]
+
+
+def get_pokeapi(request: Request) -> PokeAPIService:
+    """Devuelve el cliente de PokeAPI creado al arrancar la aplicación."""
+    return request.app.state.pokeapi
+
+
+PokeAPIDep = Annotated[PokeAPIService, Depends(get_pokeapi)]
 
 
 def _unauthorized() -> HTTPException:
