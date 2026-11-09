@@ -123,7 +123,31 @@ Cada funcionalidad sigue el ciclo *issue → rama → commits pequeños → pull
 
 ## Endpoints
 
-_Se completa a medida que se integran los routers._
+La documentación completa e interactiva está en **`/docs`** (Swagger). Para probar los endpoints protegidos, pulsa **Authorize** e introduce usuario (o email) y contraseña: Swagger obtiene el token y lo envía en cada petición.
+
+### Autenticación (`/api/v1/auth`)
+
+| Método | Ruta | Auth | Descripción |
+|---|---|:-:|---|
+| `POST` | `/register` | — | Crea una cuenta. Valida email con regex y la política de contraseñas. `201` o `409` si ya existe. |
+| `POST` | `/login` | — | Formulario OAuth2 (`username`, `password`). Devuelve access token (24 h) y refresh token (7 días). `429` si la cuenta está bloqueada. |
+| `POST` | `/refresh` | — | Cambia un refresh token por un par nuevo (rotación). Reutilizar uno ya usado revoca la sesión entera. |
+| `POST` | `/logout` | — | Revoca el refresh token y los de su misma sesión. `204`. |
+| `GET` | `/me` | 🔒 | Datos del usuario autenticado. |
+
+```bash
+# Registro
+curl -X POST http://127.0.0.1:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "ash", "email": "ash@kanto.dev", "password": "Pikachu123"}'
+
+# Login (formulario OAuth2)
+curl -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -d "username=ash&password=Pikachu123"
+
+# Endpoint protegido
+curl http://127.0.0.1:8000/api/v1/auth/me -H "Authorization: Bearer <access_token>"
+```
 
 ## Decisiones de Diseño
 
@@ -138,7 +162,31 @@ _Se completa durante el desarrollo._
 
 ## Decisiones de Seguridad
 
-_Se resume aquí y se detalla en `SECURITY.md`._
+_Resumen; el detalle completo irá en `SECURITY.md`._
+
+### Autenticación
+
+| Medida | Por qué |
+|---|---|
+| **bcrypt** (coste 12) vía passlib | Hash lento y con sal: un volcado de la base de datos no revela las contraseñas. |
+| Contraseña de 72 bytes como máximo | bcrypt ignora en silencio lo que pasa de 72 bytes; se rechaza en lugar de truncarla. |
+| Política: 8+ caracteres, mayúscula, número y sin el nombre de usuario | Requisito del enunciado, más una regla barata contra contraseñas obvias. |
+| Mismo mensaje y mismo tiempo para "usuario inexistente" y "contraseña incorrecta" | Evita descubrir qué usuarios existen. Si el usuario no existe, se verifica igualmente contra un hash ficticio. |
+| **Bloqueo temporal** tras 5 fallos seguidos (`429` + `Retry-After`) | Límite de reintentos por cuenta: frena la fuerza bruta aunque el atacante cambie de IP. |
+| JWT con `sub`, `user_id`, `exp`, `iat`, `nbf`, `iss`, `aud`, `jti` y `type` | Validación según RFC 8725: algoritmo fijado al decodificar (rechaza `alg: none` y la confusión de algoritmo), emisor y audiencia comprobados. |
+| Access token de 24 h + refresh token de 7 días **con rotación** | Cada refresh token sirve una vez. Si se reutiliza uno, se interpreta como robo y se revoca toda la sesión. |
+| El usuario se vuelve a comprobar en la base de datos en cada petición | Un token de un usuario borrado o desactivado deja de valer al momento. |
+| `Cache-Control: no-store` en las respuestas con tokens | Ningún proxy ni navegador guarda los tokens en caché. |
+| Rehash automático al iniciar sesión | Si se sube el coste de bcrypt, las contraseñas antiguas se actualizan solas. |
+
+### Vulnerabilidades conocidas en dependencias
+
+`pip-audit` señala dos avisos que **no afectan** a esta API. Se ignoran en la CI de forma explícita y justificada:
+
+- **`ecdsa`** (ataque Minerva): afecta a *firmar* con ECDSA. La API solo firma con HMAC-SHA256.
+- **`python-jose`** (confusión de algoritmo): requiere una clave pública y no restringir los algoritmos. Aquí la clave es simétrica y `decode_token` fija `algorithms=["HS256"]`. Hay tests que intentan el ataque.
+
+`python-jose` es obligatorio según el enunciado. En un proyecto real se sustituiría por `PyJWT` o `joserfc`.
 
 ## Mejoras Futuras
 

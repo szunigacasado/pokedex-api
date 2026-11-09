@@ -99,5 +99,16 @@ jobs:
 
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
+      # Vulnerabilidades analizadas y aceptadas (detalle en SECURITY.md):
+      # - PYSEC-2026-1325 (ecdsa, ataque Minerva): afecta a FIRMAR con ECDSA. La API solo
+      #   firma con HMAC (HS256); el código vulnerable no se ejecuta.
+      # - PYSEC-2026-4298 (python-jose, confusión de algoritmo): requiere una clave
+      #   pública y no restringir los algoritmos. La clave es simétrica y decode_token fija
+      #   algorithms=[HS256]; hay tests que intentan el ataque.
+      # python-jose es obligatorio según el enunciado de la práctica.
       - name: Dependencias con vulnerabilidades conocidas (pip-audit)
-        run: uvx pip-audit --requirement requirements.txt --disable-pip --no-deps --progress-spinner off
+        run: >-
+          uvx pip-audit --requirement requirements.txt --disable-pip --no-deps
+          --progress-spinner off
+          --ignore-vuln PYSEC-2026-1325
+          --ignore-vuln PYSEC-2026-4298
