@@ -145,6 +145,27 @@ class UserRead(UserBase):
     created_at: datetime
 
 
+class OAuthAccount(SQLModel, table=True):
+    """Identidad de un proveedor externo (Google) vinculada a un usuario.
+
+    Está en una tabla aparte y no en columnas de ``User`` porque así:
+
+    - un usuario podría tener varios proveedores (Google, GitHub...);
+    - se identifica por ``subject``, el ID **estable** del proveedor, y no por el email,
+      que puede cambiar o reutilizarse;
+    - se añade a una base de datos existente sin migrar la tabla ``user``.
+    """
+
+    __table_args__ = (UniqueConstraint("provider", "subject", name="uq_oauth_provider_subject"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
+    provider: str = Field(max_length=20)
+    subject: str = Field(max_length=255)
+    email: str = Field(max_length=254)
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
+
+
 # ═════════════════════════════════════════════════════════════
 #  Tokens de sesión
 # ═════════════════════════════════════════════════════════════
