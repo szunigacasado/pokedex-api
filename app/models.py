@@ -232,6 +232,10 @@ class PokemonSummary(SQLModel):
 class PokemonDetail(SQLModel):
     id: int
     name: str
+    species_name: str | None = Field(
+        default=None,
+        description="Especie a la que pertenece (las formas alternativas comparten especie).",
+    )
     height: int = Field(description="Altura en decímetros.")
     weight: int = Field(description="Peso en hectogramos.")
     base_experience: int | None = None
@@ -259,6 +263,15 @@ class PokemonSpecies(SQLModel):
     is_legendary: bool = False
     is_mythical: bool = False
     evolution_chain_id: int | None = None
+
+
+class PokemonFullDetail(PokemonDetail):
+    """Detalle del Pokémon junto con la información de su especie."""
+
+    species: PokemonSpecies | None = Field(
+        default=None,
+        description="Puede faltar si PokeAPI no la devuelve; el resto sigue siendo válido.",
+    )
 
 
 class PokemonPage(SQLModel):
