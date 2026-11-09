@@ -15,9 +15,9 @@ CASCADE``), para que se cumplan aunque algún día se escriba en ella por otra v
 
 import re
 from datetime import UTC, datetime
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import StringConstraints, field_validator, model_validator
 from sqlalchemy import JSON, CheckConstraint, Column, DateTime, Dialect, UniqueConstraint
 from sqlalchemy.types import TypeDecorator
 from sqlmodel import Field, Relationship, SQLModel
@@ -462,6 +462,65 @@ class PokedexCursorPage(SQLModel):
     next_cursor: str | None = Field(
         description="Pásalo como `cursor` para pedir la página siguiente; null si no hay más."
     )
+
+
+# ═════════════════════════════════════════════════════════════
+#  Profesor Oak (IA)
+# ═════════════════════════════════════════════════════════════
+TypeName = Literal[
+    "normal", "fire", "water", "electric", "grass", "ice", "fighting", "poison", "ground",
+    "flying", "psychic", "bug", "rock", "ghost", "dragon", "dark", "steel", "fairy",
+]  # fmt: skip
+StatName = Literal["hp", "attack", "defense", "special_attack", "special_defense", "speed"]
+AiSource = Literal["ai", "rules"]
+
+_Line = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=240)]
+
+
+class OakAdvice(SQLModel):
+    """Consejo del Profesor Oak. Los límites de longitud también se aplican a lo que
+    devuelve el modelo: una respuesta desproporcionada no llega nunca al cliente."""
+
+    summary: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)]
+    strengths: list[_Line] = Field(default_factory=list, max_length=4)
+    weaknesses: list[_Line] = Field(default_factory=list, max_length=4)
+    suggestions: list[_Line] = Field(default_factory=list, max_length=4)
+
+
+class TeamAdvice(OakAdvice):
+    team_id: int
+    source: AiSource = Field(description="`ai` si lo ha redactado el modelo; `rules` si no.")
+    model: str | None = None
+
+
+class PokemonQuery(SQLModel):
+    """Filtros de búsqueda. La IA solo puede producir esta estructura: cualquier valor
+    fuera de estas listas o rangos hace que se descarte su respuesta."""
+
+    types: list[TypeName] = Field(default_factory=list, max_length=2)
+    exclude_types: list[TypeName] = Field(default_factory=list, max_length=5)
+    min_stats: dict[StatName, Annotated[int, Field(ge=1, le=255)]] = Field(default_factory=dict)
+    max_stats: dict[StatName, Annotated[int, Field(ge=1, le=255)]] = Field(default_factory=dict)
+    legendary: bool | None = None
+    mythical: bool | None = None
+    sort_by: StatName | Literal["total"] | None = None
+    order: Literal["asc", "desc"] = "desc"
+    limit: int = Field(default=10, ge=1, le=20)
+
+
+class AskResultItem(PokemonSummary):
+    total: int
+
+
+class AskResult(SQLModel):
+    question: str
+    interpreted: PokemonQuery
+    explanation: str = Field(description="Los filtros aplicados, en español.")
+    dataset: str = Field(description="Datos sobre los que se busca.")
+    count: int
+    results: list[AskResultItem]
+    source: AiSource
+    model: str | None = None
 
 
 class PokedexStats(SQLModel):
