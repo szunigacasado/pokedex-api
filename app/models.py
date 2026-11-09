@@ -394,6 +394,34 @@ class PokedexEntryUpdate(SQLModel):
         return _not_in_future(value)
 
 
+class PokedexStats(SQLModel):
+    """Estadísticas de la Pokédex. Los seis primeros campos son los del enunciado."""
+
+    total_pokemon: int = Field(description="Pokémon guardados en la Pokédex.")
+    captured: int
+    favorites: int
+    completion_percentage: float = Field(
+        description="Porcentaje de los Pokémon de la Pokédex que están capturados (1 decimal)."
+    )
+    most_common_type: str | None = Field(
+        description="Tipo más frecuente; si hay empate, el primero alfabéticamente."
+    )
+    capture_streak_days: int = Field(
+        description="Días consecutivos con capturas hasta hoy (sigue viva si ayer hubo captura)."
+    )
+    longest_streak_days: int
+    type_distribution: dict[str, int] = Field(description="Pokémon por tipo, de más a menos.")
+    first_capture_date: datetime | None
+    last_capture_date: datetime | None
+    national_dex_total: int | None = Field(
+        description="Especies existentes según PokeAPI; null si PokeAPI no responde."
+    )
+    national_dex_percentage: float | None = Field(
+        description="Porcentaje de la Pokédex Nacional capturado."
+    )
+    timezone: str = Field(description="Zona horaria usada para decidir qué es «un día».")
+
+
 class PokedexPage(SQLModel):
     count: int = Field(description="Total de entradas que cumplen los filtros.")
     limit: int
