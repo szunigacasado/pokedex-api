@@ -74,7 +74,7 @@ Ver [`.env.example`](.env.example): cada variable está documentada en el propio
 ## Ejecución
 
 ```bash
-uv run uvicorn app.main:app --reload --no-server-header
+uv run uvicorn app.main:app --reload --no-server-header --no-access-log
 ```
 
 - Documentación interactiva (Swagger): <http://127.0.0.1:8000/docs>
@@ -82,7 +82,7 @@ uv run uvicorn app.main:app --reload --no-server-header
 
 La aplicación no arranca si falta `SECRET_KEY` o si tiene menos de 32 caracteres. En producción tampoco arranca con la clave de ejemplo de `.env.example`.
 
-`--no-server-header` evita que las respuestas revelen qué servidor web se usa. El arranque con HTTPS en el puerto 443 se añade en `features/https-docker`.
+`--no-server-header` evita que las respuestas revelen qué servidor web se usa. `--no-access-log` desactiva el registro de accesos de uvicorn, porque la API ya registra cada petición con más detalle (ver «Logging»). El arranque con HTTPS en el puerto 443 se añade en `features/https-docker`.
 
 ## Testing
 
@@ -325,6 +325,31 @@ CORS no es un mecanismo de autenticación: solo impide que una web ajena lea las
 _Se completa en `features/api-v2`._
 
 ### Otras decisiones
+
+#### Logging
+
+Configurado en [`app/logging_config.py`](app/logging_config.py), con un middleware ASGI propio en [`app/middleware.py`](app/middleware.py).
+
+```
+2026-11-09 13:38:25,802 - pokedex_api.http - INFO - [c00b730f…] Request: POST /api/v1/auth/register
+2026-11-09 13:38:25,804 - pokedex_api.errors - WARNING - [c00b730f…] Error de validación en POST /api/v1/auth/register: body.password (string_too_short)
+2026-11-09 13:38:25,804 - pokedex_api.http - WARNING - [c00b730f…] Response: 422 | Duration: 0.008s
+```
+
+| Qué se registra (apartado 2.6) | Dónde |
+|---|---|
+| Todas las peticiones HTTP: método, ruta, código y duración, más IP y usuario | `pokedex_api.http` (middleware) |
+| Errores de autenticación: token rechazado, login fallido, cuenta bloqueada, reutilización de refresh token | `pokedex_api.auth` |
+| Llamadas a PokeAPI: URL, código, duración e intento; reintentos y uso de datos de respaldo | `pokedex_api.pokeapi` |
+| Errores de validación: campo y tipo de error, **sin el valor enviado** | `pokedex_api.errors` |
+| Rate limit superado: ruta, clave y límite | `pokedex_api.rate_limit` |
+| Errores no controlados, con su traza completa | `pokedex_api.http` |
+
+- **Salida:** consola y fichero `pokedex_api.log` con rotación (5 MB x 3 copias). Formato de texto del enunciado o JSON (`LOG_FORMAT=json`) para un agregador como Loki, ELK o CloudWatch.
+- **ID de petición:** cada respuesta lleva la cabecera `X-Request-ID` y todas las líneas de log de esa petición llevan el mismo ID, así que se puede seguir una petición de principio a fin. Si el cliente o un proxy envían su propio `X-Request-ID`, se reutiliza solo si tiene un formato seguro, para evitar la inyección de logs (CWE-117).
+- **Nunca se registran secretos:** el código no registra tokens ni contraseñas y, como defensa en profundidad, un filtro oculta cualquier `Bearer …`, JWT, `password=…` o `secret_key=…` que apareciera en un mensaje o en una traza. Los parámetros sensibles de la URL (`token`, `password`…) también se ocultan.
+- **Errores de validación sin eco:** FastAPI devuelve por defecto, en cada error `422`, el valor que envió el cliente. Si fallaba la contraseña, la respuesta la repetía. Aquí el `422` solo dice qué campo falla y por qué.
+- **Middleware protegido:** si un endpoint falla sin control, el cliente recibe un `500` genérico con su `request_id` (nunca la traza, que revelaría rutas y librerías internas) y el log guarda la traza completa. El registro de cada petición se hace en un bloque `finally`, así que ocurre siempre. Es un middleware ASGI puro, no `BaseHTTPMiddleware`: no copia las respuestas y no rompe las descargas en *streaming*.
 
 #### Cliente de PokeAPI resiliente
 
