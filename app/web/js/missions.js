@@ -15,6 +15,7 @@ export const MISSIONS = [
   { id: "advice", icon: "👨‍🔬", title: "Pide consejo al Profesor Oak", hint: "En la página de tu equipo.", href: "#/equipos", check: ({ flags }) => Boolean(flags.advice) },
   { id: "ask", icon: "💬", title: "Hazle una pregunta a Oak", hint: "Por ejemplo: «dragones que no sean legendarios».", href: "#/oak", check: ({ flags }) => Boolean(flags.ask) },
   { id: "shiny", icon: "✨", title: "Descubre un variocolor", hint: "Pulsa «Variocolor» en la ficha de un Pokémon.", href: "#/pokemon/25", check: ({ flags }) => Boolean(flags.shiny) },
+  { id: "guess", icon: "🎮", title: "Adivina una silueta", hint: "Juega a «Adivina la silueta».", href: "#/juego", check: ({ flags }) => Boolean(flags.guess) },
   { id: "ten", icon: "🏅", title: "Captura 10 de Kanto", hint: "Ya casi eres un experto.", href: "#/buscar", check: ({ collection }) => collection.filter((e) => e.is_captured && e.pokemon_id <= 151).length >= 10 },
 ];
 
