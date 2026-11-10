@@ -515,6 +515,16 @@ class AskResultItem(PokemonSummary):
     total: int
 
 
+class KantoPokemon(PokemonSummary):
+    """Un Pokémon del catálogo de Kanto: lo justo para pintar una cuadrícula y filtrar."""
+
+    artwork: str | None = Field(default=None, description="Ilustración oficial.")
+    total: int = Field(description="Suma de sus estadísticas base.")
+    genus: str | None = Field(default=None, schema_extra={"examples": ["Pokémon Ratón"]})
+    is_legendary: bool = False
+    is_mythical: bool = False
+
+
 class AskResult(SQLModel):
     question: str
     interpreted: PokemonQuery

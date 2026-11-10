@@ -180,3 +180,45 @@ export function filenameFromDisposition(header, fallback = "descarga") {
   const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(header ?? "");
   return match ? decodeURIComponent(match[1]) : fallback;
 }
+
+// ── Imágenes de PokeAPI ──────────────────────────────────────────────────────
+const SPRITES = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon";
+
+export function spriteUrl(id) {
+  return `${SPRITES}/${id}.png`;
+}
+
+export function artworkUrl(id, { shiny = false } = {}) {
+  return `${SPRITES}/other/official-artwork/${shiny ? "shiny/" : ""}${id}.png`;
+}
+
+// ── Medidas (PokeAPI usa decímetros y hectogramos) ───────────────────────────
+const NUMBER = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 1 });
+
+export function heightLabel(decimeters) {
+  return `${NUMBER.format(decimeters / 10)} m`;
+}
+
+export function weightLabel(hectograms) {
+  return `${NUMBER.format(hectograms / 10)} kg`;
+}
+
+export function percent(value, digits = 0) {
+  return `${new Intl.NumberFormat("es-ES", { maximumFractionDigits: digits }).format(value)} %`;
+}
+
+/** Búsqueda tolerante: sin mayúsculas ni acentos («Pokémon» = «pokemon»). */
+export function normalize(text) {
+  return (text ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
+}
+
+/**
+ * ¿Coincide un Pokémon con lo que se ha escrito? Admite el nombre o el número
+ * («25», «#025»).
+ */
+export function matchesQuery(pokemon, query) {
+  const q = normalize(query).replace(/^#/, "");
+  if (!q) return true;
+  if (/^\d+$/.test(q)) return pokemon.id === Number(q);
+  return normalize(displayName(pokemon.name)).includes(q) || normalize(pokemon.name).includes(q);
+}

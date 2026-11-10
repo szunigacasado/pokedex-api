@@ -347,6 +347,10 @@ class FallbackData:
             for _, p in sorted(self._raw["pokemon"].items(), key=lambda kv: int(kv[0]))
         ]
 
+    def species_by_id(self) -> dict[int, dict[str, Any]]:
+        """Datos de especie de los 151 (nombre, categoría, descripción, legendario…)."""
+        return {int(s["id"]): s for s in self._raw["species"].values()}
+
     def special_ids(self) -> tuple[set[int], set[int]]:
         """IDs de los Pokémon legendarios y de los míticos."""
         species = self._raw["species"].values()

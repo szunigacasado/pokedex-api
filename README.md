@@ -281,6 +281,7 @@ curl http://127.0.0.1:8000/api/v1/auth/me -H "Authorization: Bearer <access_toke
 
 | Método | Ruta | Auth | Descripción |
 |---|---|:-:|---|
+| `GET` | `/kanto` | 🔒 | Los 151 de Kanto con tipos, imágenes, total de estadísticas y categoría, **en una sola petición** y sin consultar PokeAPI (sale de los datos locales). Es lo que usa la web para pintar la Pokédex al instante; por eso tiene el límite general y no el de PokeAPI. |
 | `GET` | `/search?name=&limit=20&offset=0` | 🔒 | Busca por nombre (subcadena, sin distinguir mayúsculas). Devuelve `{id, name, sprite, types}`. |
 | `GET` | `/{id_or_name}` | 🔒 | Detalle con estadísticas, habilidades, tipos, sprites y especie (descripción y categoría en español, generación, legendario o mítico). |
 | `GET` | `/{id_or_name}/card?format=png\|pdf` | 🔒 | Descarga la ficha del Pokémon como archivo. |

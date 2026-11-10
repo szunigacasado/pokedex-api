@@ -3,17 +3,24 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  artworkUrl,
   dexNumber,
   displayName,
   filenameFromDisposition,
   friendlyError,
+  heightLabel,
+  matchesQuery,
+  normalize,
   passwordChecks,
   passwordIsValid,
+  percent,
   plural,
+  spriteUrl,
   typeClass,
   typeLabel,
   usernameProblem,
   validationMessage,
+  weightLabel,
 } from "../../app/web/js/format.js";
 
 test("números de Pokédex con tres cifras", () => {
@@ -84,4 +91,29 @@ test("mensajes para cada código HTTP", () => {
 test("nombre de fichero de Content-Disposition", () => {
   assert.equal(filenameFromDisposition('attachment; filename="pokedex-ash.csv"'), "pokedex-ash.csv");
   assert.equal(filenameFromDisposition(null, "x.pdf"), "x.pdf");
+});
+
+test("búsqueda por nombre, sin acentos ni mayúsculas, o por número", () => {
+  const charizard = { id: 6, name: "charizard" };
+  const mrMime = { id: 122, name: "mr-mime" };
+  assert.equal(normalize("  Pokémon "), "pokemon");
+  assert.ok(matchesQuery(charizard, "CHAR"));
+  assert.ok(matchesQuery(charizard, "6"));
+  assert.ok(matchesQuery(charizard, "#006"));
+  assert.ok(!matchesQuery(charizard, "60"));
+  assert.ok(matchesQuery(mrMime, "mr. mime"));
+  assert.ok(matchesQuery(charizard, ""));
+});
+
+test("imágenes de PokeAPI, también la variocolor", () => {
+  assert.match(spriteUrl(25), /\/sprites\/pokemon\/25\.png$/);
+  assert.match(artworkUrl(25), /\/official-artwork\/25\.png$/);
+  assert.match(artworkUrl(25, { shiny: true }), /\/official-artwork\/shiny\/25\.png$/);
+  assert.ok(artworkUrl(1).startsWith("https://raw.githubusercontent.com/PokeAPI/"), "el único origen de imágenes que permite la CSP");
+});
+
+test("medidas de PokeAPI en metros y kilos, con coma decimal", () => {
+  assert.equal(heightLabel(17), "1,7 m");
+  assert.equal(weightLabel(905), "90,5 kg");
+  assert.equal(percent(88.888, 1), "88,9 %");
 });

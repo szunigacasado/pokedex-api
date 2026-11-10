@@ -38,12 +38,12 @@ function initTheme() {
 route("/", { title: "Inicio", render: renderHome, nav: { label: "Inicio", icon: "🏠", order: 0 } });
 registerScreens();
 
-function renderNav(path) {
+function renderNav(active) {
   nav.replaceChildren(
     ...navRoutes().map((r) =>
       el(
         "a",
-        { class: "nav__link", href: `#${r.pattern}`, "aria-current": r.pattern === path || (r.pattern !== "/" && path.startsWith(`${r.pattern}/`)) ? "page" : null },
+        { class: "nav__link", href: `#${r.pattern}`, "aria-current": r.pattern === active ? "page" : null },
         el("span", { class: "nav__icon", "aria-hidden": "true" }, r.nav.icon),
         r.nav.label,
       ),
@@ -97,7 +97,8 @@ async function render() {
   const path = currentPath();
   const found = match(path) ?? match("/");
   nav.hidden = false;
-  renderNav(path);
+  // Una ficha pertenece a «Buscar»: así el menú indica dónde estás.
+  renderNav(found.route.parent ?? found.route.pattern);
   renderUserMenu();
   document.title = `${found.route.title} · Pokédex`;
   try {
@@ -105,7 +106,11 @@ async function render() {
   } catch (error) {
     if (token === renderToken) showError(error);
   }
-  if (token === renderToken) view.focus({ preventScroll: true });
+  if (token === renderToken) {
+    // Cada pantalla empieza arriba, y el lector de pantalla anuncia el contenido nuevo.
+    window.scrollTo({ top: 0 });
+    view.focus({ preventScroll: true });
+  }
 }
 
 events.addEventListener("session", (event) => {
