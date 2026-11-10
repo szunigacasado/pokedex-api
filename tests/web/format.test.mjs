@@ -10,6 +10,9 @@ import {
   friendlyError,
   heightLabel,
   matchesQuery,
+  multiplierClass,
+  multiplierLabel,
+  multiplierMeaning,
   normalize,
   passwordChecks,
   passwordIsValid,
@@ -116,4 +119,15 @@ test("medidas de PokeAPI en metros y kilos, con coma decimal", () => {
   assert.equal(heightLabel(17), "1,7 m");
   assert.equal(weightLabel(905), "90,5 kg");
   assert.equal(percent(88.888, 1), "88,9 %");
+});
+
+test("multiplicadores de daño para el mapa de debilidades", () => {
+  assert.deepEqual([4, 2, 1, 0.5, 0.25, 0].map(multiplierLabel), ["×4", "×2", "×1", "×½", "×¼", "×0"]);
+  assert.deepEqual(
+    [4, 2, 1, 0.5, 0.25, 0].map(multiplierClass),
+    ["mult--x4", "mult--x2", "mult--neutral", "mult--half", "mult--quarter", "mult--immune"],
+  );
+  assert.equal(multiplierMeaning(0), "no le afecta");
+  assert.equal(multiplierMeaning(0.5), "resiste");
+  assert.equal(multiplierMeaning(4), "daño cuádruple");
 });

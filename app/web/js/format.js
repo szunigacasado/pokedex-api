@@ -222,3 +222,29 @@ export function matchesQuery(pokemon, query) {
   if (/^\d+$/.test(q)) return pokemon.id === Number(q);
   return normalize(displayName(pokemon.name)).includes(q) || normalize(pokemon.name).includes(q);
 }
+
+// ── Efectividad de tipos (mapa de calor de los equipos) ──────────────────────
+const FRACTIONS = Object.freeze({ 0.25: "¼", 0.5: "½" });
+
+/** 2 → «×2», 0.5 → «×½», 0 → «×0». */
+export function multiplierLabel(value) {
+  return `×${Object.hasOwn(FRACTIONS, value) ? FRACTIONS[value] : value}`;
+}
+
+/** Clase CSS según lo que significa para el defensor. */
+export function multiplierClass(value) {
+  if (value === 0) return "mult--immune";
+  if (value >= 4) return "mult--x4";
+  if (value >= 2) return "mult--x2";
+  if (value <= 0.25) return "mult--quarter";
+  if (value < 1) return "mult--half";
+  return "mult--neutral";
+}
+
+export function multiplierMeaning(value) {
+  if (value === 0) return "no le afecta";
+  if (value >= 4) return "daño cuádruple";
+  if (value >= 2) return "daño doble";
+  if (value < 1) return "resiste";
+  return "daño normal";
+}

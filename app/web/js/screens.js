@@ -2,6 +2,8 @@
 
 import { route } from "./router.js";
 import { renderCollection } from "./views/collection.js";
+import { renderOak } from "./views/oak.js";
+import { renderTeamEditor, renderTeams } from "./views/teams.js";
 import { renderPokemon } from "./views/pokemon.js";
 import { renderSearch } from "./views/search.js";
 import { renderStats } from "./views/stats.js";
@@ -10,5 +12,10 @@ export function registerScreens() {
   route("/buscar", { title: "Buscar", render: renderSearch, nav: { label: "Buscar", icon: "🔍", order: 10, hint: "Los 151 de Kanto y más" } });
   route("/pokemon/:id", { title: "Ficha", render: renderPokemon, parent: "/buscar" });
   route("/pokedex", { title: "Mi Pokédex", render: renderCollection, nav: { label: "Mi Pokédex", icon: "📕", order: 20, hint: "Tu colección" } });
+  // «nuevo» va antes que «:id»: se comprueban en orden y «nuevo» no es un ID.
+  route("/equipos", { title: "Equipos", render: renderTeams, nav: { label: "Equipos", icon: "⚔️", order: 30, hint: "Hasta seis y su análisis" } });
+  route("/equipos/nuevo", { title: "Nuevo equipo", render: renderTeamEditor, parent: "/equipos" });
+  route("/equipos/:id", { title: "Equipo", render: renderTeamEditor, parent: "/equipos" });
+  route("/oak", { title: "Profesor Oak", render: renderOak, nav: { label: "Profesor Oak", icon: "👨‍🔬", order: 40, hint: "Pregúntale con tus palabras" } });
   route("/estadisticas", { title: "Estadísticas", render: renderStats, nav: { label: "Estadísticas", icon: "📊", order: 60, hint: "Tu progreso en gráficos" } });
 }
