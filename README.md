@@ -2,11 +2,20 @@
 
 ![CI](https://github.com/szunigacasado/pokedex-api/actions/workflows/ci.yml/badge.svg)
 
-API REST para que cada entrenador gestione su **Pokédex personal**: busca Pokémon en la [PokeAPI](https://pokeapi.co/) pública, los guarda en su colección, los marca como capturados, consulta estadísticas y monta equipos de batalla de hasta seis Pokémon.
-
 Práctica 1 del Módulo 2 (APIs REST y fundamentos de integración) de **Sistemas de Información**, Universidad Francisco de Vitoria.
 
-> 🚧 **En construcción.** Este README crece con cada rama `features/` integrada en `develop`. Las secciones que aún no tienen contenido indican qué rama las completará.
+## Descripción
+
+API REST para que cada entrenador gestione su **Pokédex personal**: busca Pokémon en la [PokeAPI](https://pokeapi.co/) pública, los guarda en su colección, los marca como capturados, consulta estadísticas y monta equipos de batalla de hasta seis Pokémon.
+
+Además de lo que pide el enunciado:
+
+- **Equipos con análisis real:** cobertura de tipos con la tabla oficial de efectividades, exportación a PDF con gráfico radar y fichas descargables de cada Pokémon en PNG o PDF.
+- **El «Profesor Oak», una IA gratuita (Groq)** que aconseja sobre un equipo y entiende búsquedas en lenguaje natural. Si la IA no está disponible, responde igual con reglas.
+- **Inicio de sesión con Google** (OpenID Connect con PKCE).
+- **API v2** con evoluciones y paginación por cursor, y retirada ordenada de la v1.
+- **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
+- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 480 tests y un 99 % de cobertura.
 
 ## Equipo
 
@@ -34,11 +43,22 @@ Práctica **individual**, autorizada por el profesor.
 ```
 pokedex-api/
 ├── app/
-│   ├── routers/        # Endpoints agrupados por recurso
-│   └── services/       # Clientes de APIs externas (PokeAPI)
-├── deploy/Caddyfile    # Proxy inverso HTTPS (Docker)
-├── tests/
-├── .env.example        # Plantilla de variables de entorno
+│   ├── main.py             # Aplicación, middlewares y routers
+│   ├── __main__.py         # uv run python -m app → HTTPS en el puerto 443
+│   ├── server.py           # Certificado local y redirección HTTP → HTTPS
+│   ├── config.py           # Configuración validada (pydantic-settings)
+│   ├── database.py · models.py · auth.py · dependencies.py
+│   ├── security_middleware.py · middleware.py · rate_limit.py · errors.py
+│   ├── logging_config.py · docs.py
+│   ├── routers/            # auth, oauth, pokemon, pokedex, teams, oak (IA), v2
+│   ├── services/           # PokeAPI, Google, IA, estadísticas, análisis, fichas, exportaciones
+│   ├── data/               # Respaldo de los 151 Pokémon de Kanto
+│   └── assets/ · static/   # Fuente de las fichas y JavaScript de /docs
+├── deploy/Caddyfile        # Proxy inverso HTTPS (Docker)
+├── tests/                  # Un fichero por módulo, más conftest.py y fakes.py
+├── .github/                # CI y Dependabot
+├── SECURITY.md             # Consideraciones de seguridad
+├── .env.example            # Plantilla de variables de entorno
 ├── Dockerfile          # Imagen multi-stage, sin root
 ├── compose.yaml        # API + Caddy en el puerto 443
 ├── pyproject.toml      # Dependencias y configuración de herramientas (uv)
@@ -185,7 +205,12 @@ Medidas de seguridad del propio flujo:
 | `features/<nombre>` | Una rama por funcionalidad, creada desde `develop`. |
 | `fix/<nombre>` | Correcciones de errores ya integrados. |
 
-Cada funcionalidad sigue el ciclo *issue → rama → commits pequeños → pull request → revisión → integración*, con mensajes en formato [Conventional Commits](https://www.conventionalcommits.org/es/). El avance se sigue en el tablero de GitHub Projects del repositorio.
+Cada funcionalidad sigue el ciclo *issue → rama → commits pequeños → pull request → revisión → integración*, con mensajes en formato [Conventional Commits](https://www.conventionalcommits.org/es/).
+
+- **Tablero:** el avance se sigue en el [tablero de GitHub Projects](https://github.com/szunigacasado/pokedex-api/projects), con columnas *Por hacer*, *En curso* y *Hecho*.
+- **Historial:** cada funcionalidad tiene su issue y su PR enlazados, y se puede recorrer en la pestaña de *pull requests*.
+- **Versión entregada:** la etiqueta `v1.0.0` de `main`.
+- **Despliegue:** la API no está publicada en Internet; se ejecuta en local por HTTPS (ver «Ejecución»). Así no hay ninguna URL ni proveedor de alojamiento que delate dónde corre.
 
 ## Endpoints
 
@@ -353,6 +378,22 @@ Las rachas dependen de **dónde empieza cada día**: una captura a las 23:30 UTC
 
 El nombre del archivo se genera en ASCII (`equipo-equipo-elite-20261109.pdf`), porque las cabeceras HTTP no admiten cualquier carácter y un nombre con emojis rompería la descarga.
 
+### Profesor Oak: IA (`/api/v1`)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/teams/{id}/advice` 🔒 | Consejo para un equipo: resumen, puntos fuertes, puntos débiles y sugerencias. |
+| `GET` | `/pokemon/ask?q=los 3 de fuego más rápidos` 🔒 | Búsqueda en lenguaje natural sobre los 151 Pokémon de Kanto. |
+
+Las respuestas indican con `source` si las ha redactado la IA (`ai`, con el `model` usado) o las reglas (`rules`). Cómo se evita que la IA invente datos: ver «Profesor Oak» en «Decisiones de Seguridad».
+
+### v2 (`/api/v2`)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/pokedex?limit=&cursor=&captured=&favorite=` 🔒 | Pokédex con la evolución de cada entrada y paginación por cursor. |
+| `GET` | `/pokemon/{id_or_name}/evolution` 🔒 | Cadena evolutiva completa, con sus ramas. |
+
 ## Decisiones de Diseño
 
 ### Rate limiting
@@ -366,6 +407,7 @@ Implementado con **slowapi** en [`app/rate_limit.py`](app/rate_limit.py). Usa un
 | Tokens | 30/minuto | IP | `POST /auth/refresh`, `/auth/logout` |
 | Llaman a PokeAPI | **30/minuto** | usuario | `/pokemon/*`, `POST /pokedex`, `/teams/{id}/analysis` |
 | Exportaciones | 10/minuto | usuario | `/pokedex/export`, `/teams/{id}/export` |
+| IA (Profesor Oak) | **10/minuto** | usuario | `/teams/{id}/advice`, `/pokemon/ask` |
 | Resto de autenticados | **100/minuto** | usuario | Pokédex, estadísticas, equipos, `/auth/me` |
 
 **¿Por qué límites diferentes?** Cada tipo de endpoint tiene un coste y un riesgo distintos:
@@ -518,7 +560,7 @@ El cliente se crea **una vez** al arrancar (`lifespan`) y se comparte entre peti
 
 ## Decisiones de Seguridad
 
-_Resumen; el detalle completo irá en `SECURITY.md`._
+Resumen de las decisiones. El detalle, con el **OWASP API Security Top 10 (2023)** punto por punto, el modelo de amenazas, los riesgos aceptados y las limitaciones conocidas, está en [`SECURITY.md`](SECURITY.md).
 
 ### Autenticación
 
@@ -632,10 +674,20 @@ El servidor web no se anuncia: uvicorn se arranca con `--no-server-header` y, po
 `pip-audit` señala dos avisos que **no afectan** a esta API. Se ignoran en la CI de forma explícita y justificada:
 
 - **`ecdsa`** (ataque Minerva): afecta a *firmar* con ECDSA. La API solo firma con HMAC-SHA256.
-- **`python-jose`** (confusión de algoritmo): requiere una clave pública y no restringir los algoritmos. Aquí la clave es simétrica y `decode_token` fija `algorithms=["HS256"]`. Hay tests que intentan el ataque.
+- **`python-jose`** (confusión de algoritmo): exige que el servidor acepte el algoritmo que indica el token. Aquí nunca lo hace: los tokens propios solo se verifican con `HS256` y los ID tokens de Google solo con `RS256`. Hay tests que intentan el ataque.
 
-`python-jose` es obligatorio según el enunciado. En un proyecto real se sustituiría por `PyJWT` o `joserfc`.
+`python-jose` es obligatorio según el enunciado. En un proyecto real se sustituiría por `PyJWT` o `joserfc`. Detalle y avisos GHSA en [`SECURITY.md`](SECURITY.md#riesgos-aceptados).
 
 ## Mejoras Futuras
 
-_Se completa al cerrar la versión `v1.0.0`._
+Con más tiempo, por orden de prioridad:
+
+1. **Access tokens de 15 minutos y lista de `jti` revocados.** Hoy el *logout* revoca el refresh token, pero el access token vale hasta caducar (24 horas, como pide el enunciado).
+2. **Sustituir `python-jose` por `joserfc` o `PyJWT`**, que están mantenidos. Así desaparecerían los dos avisos aceptados en `SECURITY.md`.
+3. **Verificación del email** en las cuentas locales, con un enlace firmado. Permitiría vincular de forma segura una cuenta local con su cuenta de Google.
+4. **PostgreSQL y Redis** para escalar a varias réplicas: base de datos compartida y contadores de rate limiting comunes. La configuración ya lo admite (`DATABASE_URL`, `RATE_LIMIT_STORAGE_URI`).
+5. **Migraciones con Alembic**, en lugar de crear las tablas al arrancar.
+6. **Más IA con el mismo principio** (el código calcula y la IA redacta): un simulador de combate entre dos equipos y una explicación de cada Pokémon pensada para principiantes.
+7. **Funciones sociales:** compartir la Pokédex o un equipo con un enlace de solo lectura que caduque, y medallas por hitos (primeros 50 capturados, un equipo de cada tipo…).
+8. **Despliegue con dominio propio:** Caddy obtiene el certificado de Let's Encrypt automáticamente, y añadiendo un job a la CI cada versión de `main` se desplegaría sola.
+9. **Observabilidad:** métricas de Prometheus (latencia, errores y uso de la IA) y trazas con OpenTelemetry, aprovechando el `X-Request-ID` que ya existe.
