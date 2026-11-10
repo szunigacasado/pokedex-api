@@ -537,7 +537,13 @@ La API sirve en `/` una web propia ([`app/web/`](app/web/)) para usarla sin cono
   - Los errores llegan en lenguaje normal; un `429` muestra una cuenta atrás.
 - **Primeros pasos guiados.**
   - Al crear la cuenta se abre un **tour** que resalta cada sección sobre la propia interfaz (se maneja con el teclado: flechas y Escape). Se puede repetir con «¿Cómo funciona?».
-  - El inicio muestra 9 **misiones de entrenador** (añadir, capturar, poner apodo, crear un equipo, pedir consejo a Oak, ver un variocolor…), con su progreso. Cada una enlaza a donde se cumple y avisa al completarla.
+  - El inicio muestra 10 **misiones de entrenador** (añadir, capturar, poner apodo, crear un equipo, pedir consejo a Oak, ver un variocolor, adivinar una silueta…), con su progreso. Cada una enlaza a donde se cumple y avisa al completarla.
+- **La Pokédex que habla.**
+  - Cada ficha lee en voz alta su entrada en español con la síntesis de voz del navegador, sin servicios externos ni coste. Mientras habla, la lente azul de la Pokédex se ilumina.
+  - Otro botón reproduce el **grito** del Pokémon, del repositorio de gritos de PokeAPI.
+- **Adivina la silueta.**
+  - Minijuego de 10 rondas: aparece la silueta de un Pokémon de Kanto y hay que elegir entre cuatro nombres, con señuelos del mismo tipo para que no sea fácil.
+  - Al acertar se revela con su grito y **se captura en tu Pokédex**. Guarda tu récord.
 - **Modo técnico** (botón ⚙, arriba). Abre un panel con cada petición en directo: método, ruta, código, milisegundos, `X-Request-ID` (para buscarla en el log) y el cupo de rate limiting que queda. Sirve para explicar qué pasa por debajo sin ensuciar la interfaz.
 - **Accesible:**
   - Se puede usar entera con el teclado, con un enlace para saltar al contenido y el foco siempre visible.
