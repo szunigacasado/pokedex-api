@@ -23,6 +23,7 @@ os.environ.setdefault("ALLOWED_HOSTS", "testserver,localhost,127.0.0.1")
 os.environ["GOOGLE_CLIENT_ID"] = ""
 os.environ["GOOGLE_CLIENT_SECRET"] = ""
 os.environ["GROQ_API_KEY"] = ""
+os.environ["OAUTH_SUCCESS_REDIRECT"] = ""
 
 from collections.abc import Iterator
 

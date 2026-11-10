@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Tu Pokédex personal: busca, captura y arma tu equipo.">
+  <title>Pokédex</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/web/css/app.css">
+  <script type="module" src="/web/js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#view">Saltar al contenido</a>
+
+  <div class="device">
+    <header class="device__top">
+      <div class="lens" id="lens" aria-hidden="true"></div>
+      <div class="lights" aria-hidden="true">
+        <span class="light light--red"></span>
+        <span class="light light--yellow"></span>
+        <span class="light light--green"></span>
+      </div>
+      <a class="brand" href="#/">Pokédex</a>
+      <div class="top-actions">
+        <button type="button" class="chip-toggle" id="tech-toggle" aria-pressed="false"
+                aria-controls="tech-panel" title="Ver las peticiones a la API en directo">
+          <span aria-hidden="true">⚙</span> Modo técnico
+        </button>
+        <button type="button" class="icon-btn" id="theme-toggle" aria-pressed="false"
+                title="Cambiar entre modo claro y oscuro">
+          <span class="visually-hidden">Modo oscuro</span>
+        </button>
+        <div class="user-chip" id="user-menu" hidden></div>
+      </div>
+    </header>
+
+    <nav class="nav" id="nav" aria-label="Secciones" hidden></nav>
+
+    <main class="screen" id="view" tabindex="-1">
+      <div class="loader">
+        <div class="pokeball" aria-hidden="true"></div>
+        <p>Encendiendo la Pokédex…</p>
+      </div>
+    </main>
+  </div>
+
+  <aside class="tech-panel" id="tech-panel" aria-labelledby="tech-title" hidden></aside>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+
+  <noscript>
+    <p class="alert">La Pokédex necesita JavaScript. También puedes usar la API desde
+      <a href="/docs">la documentación interactiva</a>.</p>
+  </noscript>
+</body>
+</html>

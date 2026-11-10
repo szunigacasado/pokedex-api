@@ -146,6 +146,7 @@ class Settings(BaseSettings):
     max_body_bytes: int = Field(default=1024 * 1024, ge=1024, le=50 * 1024 * 1024)
     hsts_max_age_seconds: int = Field(default=63_072_000, ge=0)  # 2 años
     docs_enabled: bool = Field(default=True, description="Publicar /docs, /redoc y /openapi.json")
+    web_enabled: bool = Field(default=True, description="Publicar la web de la Pokédex en /")
 
     # ── Servidor HTTPS (``python -m app``) ───────────────────
     server_host: str = Field(

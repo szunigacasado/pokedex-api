@@ -14,7 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from slowapi.errors import RateLimitExceeded
@@ -37,14 +37,33 @@ from app.services.pokeapi_service import PokeAPIService
 
 logger = logging.getLogger("pokedex_api")
 
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+APP_DIR = Path(__file__).resolve().parent
+STATIC_DIR = APP_DIR / "static"
+WEB_DIR = APP_DIR / "web"
+FONTS_DIR = APP_DIR / "assets" / "fonts"
 
 API_DESCRIPTION = """
-API REST de **Pokédex personal**.
+API REST de **Pokédex personal**: busca Pokémon en PokeAPI, guárdalos en tu colección,
+márcalos como capturados, consulta tus estadísticas y monta equipos de hasta seis.
 
-Busca Pokémon en la PokeAPI pública, guárdalos en tu colección, márcalos como
-capturados, consulta tus estadísticas y monta equipos de batalla de hasta seis Pokémon.
+¿Prefieres usarla sin tecnicismos? Abre la [**web de la Pokédex**](/).
+
+### Guía rápida
+
+1. **Crea tu cuenta** en `POST /api/v1/auth/register` (*Try it out* → *Execute*).
+2. Pulsa **Authorize** (arriba a la derecha) y escribe tu usuario y contraseña.
+3. Prueba cualquier endpoint. Para empezar: busca `pikachu` en `GET /api/v1/pokemon/search`
+   y añádelo con `POST /api/v1/pokedex` usando su `pokemon_id` (25).
 """
+
+OPENAPI_TAGS = [
+    {"name": "Autenticación", "description": "Registro, inicio de sesión y tokens."},
+    {"name": "Pokémon", "description": "Catálogo de Pokémon (datos de PokeAPI)."},
+    {"name": "Pokédex", "description": "Tu colección personal: añadir, capturar, exportar."},
+    {"name": "Equipos", "description": "Equipos de hasta seis Pokémon y su análisis."},
+    {"name": "Profesor Oak (IA)", "description": "Consejos y búsqueda en lenguaje natural."},
+    {"name": "v2", "description": "Versión 2: evoluciones y paginación por cursor."},
+]
 
 
 class HealthStatus(BaseModel):
@@ -81,6 +100,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         description=API_DESCRIPTION,
+        openapi_tags=OPENAPI_TAGS,
         # Versión del contrato de la API, no del software: no se publica ninguna
         # versión de librerías ni del servidor.
         version="v1",
@@ -94,12 +114,23 @@ def create_app() -> FastAPI:
     if settings.docs_enabled:
         app.include_router(docs.router)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    if settings.web_enabled:
+        # Web de la Pokédex: HTML, CSS y JavaScript propios, sin compilación. Usa la
+        # misma API que cualquier otro cliente, con su propia CSP (security_middleware).
+        app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
+        app.mount("/fonts", StaticFiles(directory=FONTS_DIR), name="fonts")
+
+        @app.get("/", include_in_schema=False)
+        def web_index() -> FileResponse:
+            return FileResponse(WEB_DIR / "index.html", media_type="text/html; charset=utf-8")
 
     @app.get(
         "/health",
         response_model=HealthStatus,
         tags=["Sistema"],
         summary="Estado del servicio",
+        # Es para los balanceadores y el healthcheck de Docker, no para los usuarios.
+        include_in_schema=False,
         responses={503: {"model": HealthStatus, "description": "Base de datos no disponible"}},
     )
     def health(session: Annotated[Session, Depends(get_session)]) -> HealthStatus | JSONResponse:
