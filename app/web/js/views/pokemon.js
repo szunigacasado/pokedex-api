@@ -14,6 +14,7 @@ import {
   weightLabel,
 } from "../format.js";
 import { addToCollection, entryFor, loadCollection, loadDetail, loadEvolution, onCollectionChange, updateEntry } from "../data.js";
+import { markDone } from "../missions.js";
 import { busy, loader, showError, toast, typeBadges } from "../ui.js";
 
 /** Piezas extra de la ficha (voz y grito, en otra rama). Reciben (detail, slot). */
@@ -52,7 +53,10 @@ function artPanel(detail) {
     button.setAttribute("aria-pressed", String(shiny));
     sparkle.classList.remove("is-active");
     void sparkle.offsetWidth; // reinicia la animación
-    if (shiny) sparkle.classList.add("is-active");
+    if (shiny) {
+      sparkle.classList.add("is-active");
+      markDone("shiny");
+    }
   });
   return el("div", { class: `art ${typeClass(types[0])}` }, el("span", { class: "art__number" }, dexNumber(detail.id)), img, sparkle, button);
 }

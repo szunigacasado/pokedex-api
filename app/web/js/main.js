@@ -6,6 +6,8 @@ import { currentPath, match, navRoutes, navigate, route } from "./router.js";
 import { loadUser, session } from "./session.js";
 import { initTechPanel } from "./techpanel.js";
 import { showError, toast } from "./ui.js";
+import { onCollectionChange } from "./data.js";
+import { watchMissions } from "./missions.js";
 import { renderAuth } from "./views/auth.js";
 import { renderHome } from "./views/home.js";
 import { registerScreens } from "./screens.js";
@@ -123,6 +125,7 @@ events.addEventListener("session", (event) => {
 async function start() {
   initTheme();
   initTechPanel();
+  watchMissions(onCollectionChange, (message) => toast(message, { type: "ok", timeout: 6000 }));
   const fromGoogle = takeTokensFromUrl();
   if (fromGoogle || (await restoreSession())) {
     try {
