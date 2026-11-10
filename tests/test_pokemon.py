@@ -339,3 +339,32 @@ def test_card_filename_is_safe() -> None:
     detail = make_detail(name='mr-mime"; rm -rf /')
 
     assert card_filename(detail, "png") == "0150-mr-mimerm-rf-ficha.png"
+
+
+# ═════════════════════════════════════════════════════════════
+#  Catálogo de Kanto
+# ═════════════════════════════════════════════════════════════
+def test_kanto_catalog_comes_from_local_data_in_one_request(
+    client: TestClient, auth_headers: dict
+) -> None:
+    """La web pinta la Pokédex con una sola petición y sin gastar llamadas a PokeAPI."""
+    with respx.mock(assert_all_called=False) as pokeapi:
+        response = client.get("/api/v1/pokemon/kanto", headers=auth_headers)
+        assert not pokeapi.calls
+
+    assert response.status_code == 200
+    catalog = response.json()
+    assert len(catalog) == 151
+    assert [p["id"] for p in catalog] == list(range(1, 152))
+    bulbasaur, pikachu = catalog[0], catalog[24]
+    assert bulbasaur["name"] == "bulbasaur"
+    assert bulbasaur["types"] == ["grass", "poison"]
+    assert bulbasaur["total"] == 318
+    assert pikachu["genus"] == "Pokémon Ratón"
+    assert pikachu["artwork"].endswith("/official-artwork/25.png")
+    assert catalog[149]["is_legendary"] and catalog[150]["is_mythical"]  # Mewtwo y Mew
+    assert response.headers["cache-control"] == "private, max-age=3600"
+
+
+def test_kanto_catalog_requires_authentication(client: TestClient) -> None:
+    assert client.get("/api/v1/pokemon/kanto").status_code == 401
