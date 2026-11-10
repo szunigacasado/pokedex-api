@@ -1,7 +1,7 @@
 // Piezas de interfaz reutilizables: avisos, carga, ventanas modales, tarjetas e insignias.
 
 import { el } from "./dom.js";
-import { dexNumber, displayName, typeClass, typeLabel } from "./format.js";
+import { artworkUrl, dexNumber, displayName, typeClass, typeLabel } from "./format.js";
 
 // ── Avisos ───────────────────────────────────────────────────
 export function toast(message, { type = "info", timeout = 4500 } = {}) {
@@ -64,6 +64,19 @@ export function typeBadges(types) {
 }
 
 /**
+ * Ilustración oficial (se descarga solo al aparecer en pantalla). Si no existe, se usa
+ * el sprite pequeño; si tampoco, una silueta de interrogación.
+ */
+function cardImage(id, sprite) {
+  const img = el("img", { class: "card__img", src: artworkUrl(id), alt: "", loading: "lazy", decoding: "async", width: 110, height: 110 });
+  img.addEventListener("error", () => {
+    if (sprite && img.src !== sprite) img.src = sprite;
+    else img.replaceWith(el("div", { class: "card__img card__img--missing", "aria-hidden": "true" }, "?"));
+  });
+  return img;
+}
+
+/**
  * Tarjeta de un Pokémon. `href` la convierte en enlace; `onClick`, en botón.
  * `badge` muestra un icono en la esquina (★ favorito, ● capturado…).
  */
@@ -81,9 +94,7 @@ export function pokemonCard({ id, name, sprite, types = [], href, onClick, badge
     props,
     el("span", { class: "card__number" }, dexNumber(id)),
     badge ? el("span", { class: "card__badge", "aria-hidden": "true" }, badge) : null,
-    sprite
-      ? el("img", { class: "card__img", src: sprite, alt: "", loading: "lazy", width: 110, height: 110 })
-      : el("div", { class: "card__img", "aria-hidden": "true" }, "?"),
+    cardImage(id, sprite),
     el("span", { class: "card__name" }, displayName(name)),
     typeBadges(types),
   );
