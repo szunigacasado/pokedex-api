@@ -186,6 +186,15 @@ jobs:
           fi
           echo "::endgroup::"
 
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Prueba de humo de todos los endpoints a través de Caddy
+        run: |
+          pip install --quiet "httpx==$(grep -oP '^httpx==\K\S+' requirements.txt)"
+          python -m scripts.smoke_test --base-url https://localhost --cacert caddy-root.crt
+
       - name: Logs de los contenedores
         if: always()
         run: docker compose logs
