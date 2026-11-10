@@ -112,3 +112,84 @@ jobs:
           --progress-spinner off
           --ignore-vuln PYSEC-2026-1325
           --ignore-vuln PYSEC-2026-4298
+
+  docker:
+    name: Docker (HTTPS en el puerto 443)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configuración de prueba
+        run: |
+          cp .env.example .env
+          sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(openssl rand -hex 32)|" .env
+
+      - name: Construir y arrancar la API y Caddy
+        run: docker compose up --build --detach --wait --wait-timeout 180
+
+      - name: Confiar en la CA interna de Caddy
+        run: |
+          for _ in $(seq 30); do
+            docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt caddy-root.crt \
+              2>/dev/null && break
+            sleep 1
+          done
+          openssl x509 -in caddy-root.crt -noout -subject
+
+      - name: Probar la API por HTTPS en el puerto 443
+        run: |
+          set -euo pipefail
+          api() { curl --silent --show-error --fail --cacert caddy-root.crt "$@"; }
+
+          echo "::group::Certificado válido y salud"
+          api --retry 15 --retry-all-errors --retry-delay 1 https://localhost/health
+          echo
+          echo "::endgroup::"
+
+          echo "::group::Cabeceras: HSTS y sin Server ni Via"
+          headers=$(api --dump-header - --output /dev/null https://localhost/health)
+          echo "$headers"
+          grep -qi '^strict-transport-security:' <<<"$headers"
+          if grep -qiE '^(server|via):' <<<"$headers"; then exit 1; fi
+          echo "::endgroup::"
+
+          echo "::group::HTTP redirige a HTTPS con 308"
+          redirect=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' 'http://localhost/docs?x=1')
+          echo "$redirect"
+          test "$redirect" = "308 https://localhost/docs?x=1"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://localhost/)" = 400
+          echo "::endgroup::"
+
+          echo "::group::Registro, login y ruta protegida"
+          api -X POST https://localhost/api/v1/auth/register -H 'Content-Type: application/json' \
+            -d '{"username":"ci-bot","email":"ci-bot@kanto.dev","password":"Pikachu123"}'
+          echo
+          token=$(api -X POST https://localhost/api/v1/auth/login \
+            -d 'username=ci-bot&password=Pikachu123' | jq -r .access_token)
+          api https://localhost/api/v1/auth/me -H "Authorization: Bearer $token"
+          echo
+          echo "::endgroup::"
+
+          echo "::group::La API no es accesible sin pasar por Caddy"
+          if curl -s --max-time 3 http://localhost:8000/health; then exit 1; fi
+          echo "::endgroup::"
+
+          echo "::group::La API ve la IP real y no acepta X-Forwarded-For falsificado"
+          curl -s -o /dev/null --cacert caddy-root.crt -H 'X-Forwarded-For: 203.0.113.66' \
+            -X POST https://localhost/api/v1/auth/login -d 'username=ci-bot&password=incorrecta'
+          logs=$(docker compose logs api)
+          grep 'Login fallido desde' <<<"$logs"
+          # Ni la IP de Caddy (172.30.0.2) ni la que ha escrito el cliente
+          if grep -qE 'Login fallido desde (172\.30\.0\.2|203\.0\.113\.66)' <<<"$logs"; then
+            exit 1
+          fi
+          echo "::endgroup::"
+
+      - name: Logs de los contenedores
+        if: always()
+        run: docker compose logs
+
+      - name: Parar y borrar los contenedores
+        if: always()
+        run: docker compose down --volumes

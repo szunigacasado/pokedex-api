@@ -32,3 +32,24 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+
+  # Imágenes base del Dockerfile y de compose.yaml (fijadas por digest)
+  - package-ecosystem: docker
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: docker-compose
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope

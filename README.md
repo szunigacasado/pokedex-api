@@ -36,8 +36,11 @@ pokedex-api/
 ├── app/
 │   ├── routers/        # Endpoints agrupados por recurso
 │   └── services/       # Clientes de APIs externas (PokeAPI)
+├── deploy/Caddyfile    # Proxy inverso HTTPS (Docker)
 ├── tests/
 ├── .env.example        # Plantilla de variables de entorno
+├── Dockerfile          # Imagen multi-stage, sin root
+├── compose.yaml        # API + Caddy en el puerto 443
 ├── pyproject.toml      # Dependencias y configuración de herramientas (uv)
 ├── uv.lock             # Versiones exactas resueltas por uv
 └── requirements.txt    # Exportado desde uv.lock para instalar con pip
@@ -73,8 +76,66 @@ Ver [`.env.example`](.env.example): cada variable está documentada en el propio
 
 ## Ejecución
 
+Hay tres formas de arrancar la API. Las dos primeras usan el puerto 443 con HTTPS.
+
+### 1. HTTPS en el puerto 443, sin Docker (recomendada para probarla)
+
 ```bash
-uv run uvicorn app.main:app --reload --no-server-header --no-access-log
+uv run python -m app
+```
+
+- API: <https://localhost> · Swagger: <https://localhost/docs>
+- El puerto 80 redirige a HTTPS con un `308`.
+- La primera vez se genera en `certs/` un certificado para `localhost`, firmado por una CA local que se crea solo para eso. La carpeta `certs/` no se sube al repositorio.
+
+El navegador avisará de que no conoce la CA. Puedes aceptar el aviso o, si lo prefieres, añadir `certs/ca.pem` a los certificados de confianza:
+
+```bash
+certutil -user -addstore Root certs\ca.pem
+```
+
+Ese es el comando de Windows, sin necesidad de ser administrador. En macOS: `security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db certs/ca.pem`. Confiar en ella es seguro por dos motivos:
+
+- **La clave privada de la CA no se guarda nunca**, así que no puede firmar nada más.
+- **Tiene *Name Constraints*:** solo es válida para `localhost`, `127.0.0.1` y `::1`.
+
+Con `curl`:
+
+```bash
+curl --cacert certs/ca.pem https://localhost/health
+```
+
+En Windows, el `curl` del sistema necesita además `--ssl-no-revoke`, porque un certificado local no publica una lista de revocación.
+
+Variables (en `.env`):
+
+- `HTTPS_PORT` (443) y `HTTP_REDIRECT_PORT` (80; `0` lo desactiva). Si el puerto 80 está ocupado, se sirve solo HTTPS y se avisa.
+- `SERVER_HOST` (127.0.0.1).
+- `TLS_CERTFILE` y `TLS_KEYFILE`, para usar un certificado propio, por ejemplo de `mkcert`.
+
+En Linux, los puertos por debajo de 1024 requieren privilegios: usa `HTTPS_PORT=8443` o Docker. Para iniciar sesión con Google por HTTPS, pon `GOOGLE_REDIRECT_URI=https://localhost/api/v1/auth/google/callback` y añade esa URI a las autorizadas en Google Cloud.
+
+### 2. HTTPS en el puerto 443 con Docker
+
+```bash
+cp .env.example .env   # y pon una SECRET_KEY propia
+docker compose up --build
+```
+
+- [`compose.yaml`](compose.yaml) levanta dos contenedores:
+  - **Caddy**, que termina TLS en el puerto 443 con su CA interna y redirige el 80 al 443 ([`deploy/Caddyfile`](deploy/Caddyfile)).
+  - **La API**, en una red interna sin puertos publicados: solo se llega a ella a través de Caddy.
+- Para que `curl` confíe en la CA de Caddy:
+
+  ```bash
+  docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt caddy-root.crt
+  ```
+- En un dominio público, `SITE_HOST=api.midominio.com` y quitar `tls internal` del Caddyfile hace que Caddy obtenga el certificado de Let's Encrypt.
+
+### 3. Desarrollo (HTTP en el puerto 8000, con recarga automática)
+
+```bash
+uv run uvicorn app.main:app --reload --no-server-header --no-access-log --no-proxy-headers
 ```
 
 - Documentación interactiva (Swagger): <http://127.0.0.1:8000/docs>
@@ -82,7 +143,11 @@ uv run uvicorn app.main:app --reload --no-server-header --no-access-log
 
 La aplicación no arranca si falta `SECRET_KEY` o si tiene menos de 32 caracteres. En producción tampoco arranca con la clave de ejemplo de `.env.example`.
 
-`--no-server-header` evita que las respuestas revelen qué servidor web se usa. `--no-access-log` desactiva el registro de accesos de uvicorn, porque la API ya registra cada petición con más detalle (ver «Logging»). El arranque con HTTPS en el puerto 443 se añade en `features/https-docker`.
+Qué hace cada opción:
+
+- `--no-server-header`: las respuestas no revelan qué servidor web se usa.
+- `--no-access-log`: desactiva el registro de accesos de uvicorn, porque la API ya registra cada petición con más detalle (ver «Logging»).
+- `--no-proxy-headers`: sin un proxy delante, la cabecera `X-Forwarded-For` la escribe el cliente, y uvicorn la aceptaría por defecto desde 127.0.0.1.
 
 ## Testing
 
@@ -101,6 +166,7 @@ Cada test usa una base de datos SQLite en memoria creada desde cero, así que no
 | **Calidad** | `ruff check` y `ruff format --check`; que `uv.lock` coincide con `pyproject.toml` y que `requirements.txt` coincide con `uv.lock`. |
 | **Tests** | Instala desde `requirements.txt` y ejecuta `pytest --cov=app --cov-fail-under=80` en Python 3.12 y 3.13. La cobertura aparece en el resumen de la ejecución. |
 | **Seguridad** | `gitleaks` busca secretos en **todo el historial** y `pip-audit` busca vulnerabilidades conocidas en las dependencias. |
+| **Docker** | Construye la imagen y levanta la API y Caddy con `docker compose`. Después prueba por HTTPS en el puerto 443, validando el certificado contra la CA de Caddy: salud, HSTS, que no haya cabeceras `Server` ni `Via`, la redirección 308 desde HTTP, el rechazo de hosts ajenos, registro, login y una ruta protegida, que la API no sea accesible sin pasar por Caddy y que un `X-Forwarded-For` falsificado no cambie la IP que ve la API. |
 
 Medidas de seguridad del propio flujo:
 
@@ -108,7 +174,7 @@ Medidas de seguridad del propio flujo:
 - Acciones de terceros fijadas por SHA, para que una etiqueta movida no pueda inyectar código.
 - Clave de pruebas propia de la CI, nunca la real.
 
-[Dependabot](.github/dependabot.yml) propone cada semana actualizaciones de dependencias y de acciones, siempre como PR contra `develop`.
+[Dependabot](.github/dependabot.yml) propone cada semana actualizaciones de dependencias, de acciones y de las imágenes de Docker, siempre como PR contra `develop`.
 
 ## Flujo de trabajo y despliegue
 
@@ -544,6 +610,22 @@ Todos son **ASGI puros**: no copian las respuestas ni rompen el *streaming*.
 - `/docs` y `/openapi.json` se pueden desactivar con `DOCS_ENABLED=false`.
 
 El servidor web no se anuncia: uvicorn se arranca con `--no-server-header` y, por si acaso, el middleware elimina cualquier cabecera `Server`.
+
+### HTTPS y proxy inverso
+
+- **Solo HTTPS en el puerto 443.**
+  - HTTP se usa únicamente para redirigir con un `308`, que conserva el método y el cuerpo, a diferencia de un `301`.
+  - La redirección solo va a hosts de `ALLOWED_HOSTS`. Con cualquier otro responde `400`, para no convertirse en una redirección abierta.
+  - HSTS solo se envía por HTTPS.
+- **La IP real, sin poder falsificarla.** El rate limiting y el bloqueo de cuenta dependen de la IP del cliente.
+  - Con Docker, la API solo acepta `X-Forwarded-For` de la IP fija de Caddy (`FORWARDED_ALLOW_IPS`). Caddy, a su vez, sustituye la cabecera que envía el cliente en lugar de añadirse a ella.
+  - Sin proxy, `python -m app` no la acepta de nadie.
+- **Sin pistas del servidor.** Ni la API ni Caddy envían `Server` o `Via`. La API de administración de Caddy está desactivada.
+- **Contenedores endurecidos.**
+  - Usuario sin privilegios (uid 10001) y sistema de ficheros de solo lectura; solo se puede escribir en el volumen de datos.
+  - `cap_drop: ALL` y `no-new-privileges`. Caddy solo recupera `NET_BIND_SERVICE` para escuchar en 80 y 443.
+  - La imagen final no incluye `uv`, los tests ni el `.env`: `.dockerignore` excluye todo salvo `app/` y las dependencias.
+- **Imágenes base fijadas por digest**, igual que las acciones de la CI, y actualizadas por Dependabot.
 
 ### Vulnerabilidades conocidas en dependencias
 

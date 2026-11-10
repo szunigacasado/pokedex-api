@@ -28,7 +28,9 @@ colorama==0.4.6 ; sys_platform == 'win32'
 coverage==7.17.2
     # via pytest-cov
 cryptography==50.0.2
-    # via python-jose
+    # via
+    #   pokedex-api
+    #   python-jose
 deprecated==3.0.1
     # via limits
 ecdsa==0.19.2

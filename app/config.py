@@ -147,6 +147,20 @@ class Settings(BaseSettings):
     hsts_max_age_seconds: int = Field(default=63_072_000, ge=0)  # 2 años
     docs_enabled: bool = Field(default=True, description="Publicar /docs, /redoc y /openapi.json")
 
+    # ── Servidor HTTPS (``python -m app``) ───────────────────
+    server_host: str = Field(
+        default="127.0.0.1", description="Interfaz de escucha; 0.0.0.0 para toda la red."
+    )
+    https_port: int = Field(default=443, ge=1, le=65535)
+    http_redirect_port: int = Field(
+        default=80, ge=0, le=65535, description="Puerto HTTP que redirige a HTTPS; 0 lo desactiva."
+    )
+    tls_cert_dir: str = Field(
+        default="certs", description="Carpeta del certificado local que se genera si no existe."
+    )
+    tls_certfile: str = Field(default="", description="Certificado propio (PEM); vacío = local.")
+    tls_keyfile: str = Field(default="", description="Clave privada del certificado propio (PEM).")
+
     # ── Versionado ───────────────────────────────────────────
     # GET /api/v1/pokedex está obsoleto desde la publicación de la v2 y se retira en la
     # fecha de Sunset; a partir de entonces responde 410 Gone.
@@ -199,6 +213,14 @@ class Settings(BaseSettings):
                     parse_many(value)
                 except ValueError as exc:
                     raise ValueError(f"{name.upper()} no es un límite válido: {value!r}") from exc
+        return self
+
+    @model_validator(mode="after")
+    def _check_server(self) -> "Settings":
+        if bool(self.tls_certfile) != bool(self.tls_keyfile):
+            raise ValueError("TLS_CERTFILE y TLS_KEYFILE deben indicarse juntos")
+        if self.http_redirect_port == self.https_port:
+            raise ValueError("HTTP_REDIRECT_PORT y HTTPS_PORT no pueden ser el mismo puerto")
         return self
 
     @model_validator(mode="after")
