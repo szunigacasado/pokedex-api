@@ -9,6 +9,11 @@ window.addEventListener("load", function () {
     layout: "BaseLayout",
     displayRequestDuration: true,
     filter: true,
+    // Pensado para quien llega nuevo: los grupos empiezan plegados para ver el conjunto,
+    // «Try it out» ya está activado y se oculta el bloque de esquemas, que es técnico.
+    docExpansion: "list",
+    defaultModelsExpandDepth: -1,
+    tryItOutEnabled: true,
     // El token no se guarda en el navegador: al cerrar la pestaña hay que volver a
     // pulsar Authorize. Así no queda un token válido en localStorage.
     persistAuthorization: false,

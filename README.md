@@ -10,6 +10,7 @@ API REST para que cada entrenador gestione su **Pokédex personal**: busca Poké
 
 Además de lo que pide el enunciado:
 
+- **Una web de la Pokédex en `/`** para usarla sin tecnicismos: acceso guiado, estilo de Pokédex, modo oscuro y un **modo técnico** que enseña en directo cada petición REST.
 - **Equipos con análisis real:** cobertura de tipos con la tabla oficial de efectividades, exportación a PDF con gráfico radar y fichas descargables de cada Pokémon en PNG o PDF.
 - **El «Profesor Oak», una IA gratuita (Groq)** que aconseja sobre un equipo y entiende búsquedas en lenguaje natural. Si la IA no está disponible, responde igual con reglas.
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
@@ -104,7 +105,7 @@ Hay tres formas de arrancar la API. Las dos primeras usan el puerto 443 con HTTP
 uv run python -m app
 ```
 
-- API: <https://localhost> · Swagger: <https://localhost/docs>
+- Web de la Pokédex: <https://localhost> · Swagger: <https://localhost/docs>
 - El puerto 80 redirige a HTTPS con un `308`.
 - La primera vez se genera en `certs/` un certificado para `localhost`, firmado por una CA local que se crea solo para eso. La carpeta `certs/` no se sube al repositorio.
 
@@ -177,9 +178,15 @@ uv run pytest --cov=app --cov-report=term-missing
 
 Cada test usa una base de datos SQLite en memoria creada desde cero, así que no deja ficheros ni toca datos reales.
 
+La lógica de la web (cliente de la API, formatos y mensajes) se prueba con el runner de Node, sin dependencias:
+
+```bash
+node --test "tests/web/*.test.mjs"
+```
+
 ### Prueba de humo contra la API en marcha
 
-Con la API arrancada (`uv run python -m app`), este script recorre **los 29 endpoints** con un usuario nuevo y comprueba el código de respuesta y el contenido de cada uno. Termina con un resumen como `40/40 comprobaciones correctas`:
+Con la API arrancada (`uv run python -m app`), este script recorre **los 30 endpoints** con un usuario nuevo y comprueba el código de respuesta y el contenido de cada uno. Termina con un resumen como `41/41 comprobaciones correctas`:
 
 ```bash
 uv run python -m scripts.smoke_test
@@ -197,6 +204,7 @@ uv run python -m scripts.smoke_test
 |---|---|
 | **Calidad** | `ruff check` y `ruff format --check`; que `uv.lock` coincide con `pyproject.toml` y que `requirements.txt` coincide con `uv.lock`. |
 | **Tests** | Instala desde `requirements.txt` y ejecuta `pytest --cov=app --cov-fail-under=80` en Python 3.12 y 3.13. La cobertura aparece en el resumen de la ejecución. |
+| **Web** | `node --test` con los tests de la lógica de la web (cliente de la API, renovación de sesión, mensajes de error…). |
 | **Seguridad** | `gitleaks` busca secretos en **todo el historial** y `pip-audit` busca vulnerabilidades conocidas en las dependencias. |
 | **Docker** | Construye la imagen y levanta la API y Caddy con `docker compose`. Después prueba por HTTPS en el puerto 443, validando el certificado contra la CA de Caddy: salud, HSTS, que no haya cabeceras `Server` ni `Via`, la redirección 308 desde HTTP, el rechazo de hosts ajenos, registro, login y una ruta protegida, que la API no sea accesible sin pasar por Caddy y que un `X-Forwarded-For` falsificado no cambie la IP que ve la API. |
 
@@ -503,6 +511,26 @@ En esta API, el listado de la Pokédex cambia de forma y de paginación, así qu
 3. **Medir quién lo sigue usando:** cada llamada queda registrada (`Uso de endpoint obsoleto … user_id=…`) para avisar a esos clientes y decidir con datos.
 4. **Periodo de convivencia** de unos 7 meses (hasta el 30 de junio de 2027), en el que v1 y v2 funcionan a la vez. La v1 no recibe novedades, solo correcciones de seguridad.
 5. **Retirada:** a partir de la fecha de *Sunset* el endpoint responde **`410 Gone`** con el `Link` a la v2, en lugar de un `404` ambiguo. Las fechas se configuran (`V1_POKEDEX_DEPRECATED_AT`, `V1_POKEDEX_SUNSET`), así que se pueden ampliar sin tocar el código.
+
+### Web de la Pokédex
+
+La API sirve en `/` una web propia ([`app/web/`](app/web/)) para usarla sin conocer REST. Es un cliente más: llama a los mismos endpoints que Swagger o `curl`.
+
+- **Sin compilación ni dependencias.** HTML, CSS y JavaScript con módulos nativos del navegador: el profesor no instala Node ni ejecuta un *build*. Basta `uv run python -m app`.
+- **Nada técnico a la vista.**
+  - El usuario nunca ve tokens, IDs, JSON ni versiones.
+  - La sesión se renueva sola.
+  - Los errores llegan en lenguaje normal; un `429` muestra una cuenta atrás.
+- **Modo técnico** (botón ⚙, arriba). Abre un panel con cada petición en directo: método, ruta, código, milisegundos, `X-Request-ID` (para buscarla en el log) y el cupo de rate limiting que queda. Sirve para explicar qué pasa por debajo sin ensuciar la interfaz.
+- **Accesible:**
+  - Se puede usar entera con el teclado, con un enlace para saltar al contenido y el foco siempre visible.
+  - Etiquetas y avisos para lectores de pantalla, y contraste AA.
+  - Respeta «reducir movimiento», tiene modo oscuro y se adapta al móvil.
+- **Diseño propio** inspirado en el aparato Pokédex (carcasa roja, lente azul). No copia logotipos ni tipografías oficiales; las ilustraciones son las de PokeAPI.
+- **Segura por construcción.** Medidas en [`SECURITY.md`](SECURITY.md#más-allá-del-top-10):
+  - CSP propia, sin scripts ni estilos en línea y sin CDN.
+  - Todo el texto se pinta con `textContent`, nunca con `innerHTML`; un test lo comprueba en cada fichero.
+  - El access token solo vive en memoria.
 
 ### Otras decisiones
 

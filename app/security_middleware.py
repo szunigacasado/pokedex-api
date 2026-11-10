@@ -12,7 +12,8 @@ y el *API Security Top 10*:
 ``Permissions-Policy``             Cámara, micrófono, ubicación y pagos desactivados.
 ``Cross-Origin-*-Policy``          Aísla la API de otros orígenes.
 ``Content-Security-Policy``        Muy estricta en la API; en /docs solo permite el CDN de
-                                   Swagger (con SRI) y los recursos propios.
+                                   Swagger (con SRI) y los recursos propios; en la web
+                                   (/), solo código propio y las imágenes de PokeAPI.
 ``Strict-Transport-Security``      Solo si la petición llegó por HTTPS: obliga al
                                    navegador a usar siempre HTTPS durante dos años.
 ``Cache-Control: no-store``        Por defecto, ningún proxy ni navegador guarda las
@@ -39,7 +40,19 @@ DOCS_CSP: Final = (
     "img-src 'self' data:; font-src 'self' data:; connect-src 'self'; "
     "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
+# Web de la Pokédex: solo código propio. Sin scripts ni estilos en línea y sin CDN; las
+# imágenes y los gritos de los Pokémon vienen de los repositorios de PokeAPI en GitHub.
+WEB_CSP: Final = (
+    "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; "
+    "img-src 'self' data: https://raw.githubusercontent.com; "
+    "media-src https://raw.githubusercontent.com; connect-src 'self'; manifest-src 'self'; "
+    "frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+)
 STATIC_CACHE: Final = "public, max-age=86400"
+# Los ficheros de la web se revalidan en cada carga (304 si no han cambiado): así una
+# versión nueva llega al momento y no se queda una antigua en la caché del navegador.
+WEB_CACHE: Final = "no-cache"
+WEB_PREFIXES: Final = ("/web/", "/fonts/")
 
 _BASE_HEADERS: Final = (
     (b"x-content-type-options", b"nosniff"),
@@ -63,7 +76,7 @@ class SecurityHeadersMiddleware:
             return
 
         path: str = scope["path"]
-        csp = DOCS_CSP if path == "/docs" else API_CSP
+        csp = DOCS_CSP if path == "/docs" else WEB_CSP if path == "/" else API_CSP
         is_https = scope.get("scheme") == "https"
 
         async def send_with_headers(message: Message) -> None:
@@ -80,7 +93,12 @@ class SecurityHeadersMiddleware:
                 if is_https:
                     headers.append((b"strict-transport-security", self.hsts))
                 if b"cache-control" not in present:
-                    cache = STATIC_CACHE if path.startswith("/static/") else "no-store"
+                    if path.startswith("/static/"):
+                        cache = STATIC_CACHE
+                    elif path.startswith(WEB_PREFIXES):
+                        cache = WEB_CACHE
+                    else:
+                        cache = "no-store"
                     headers.append((b"cache-control", cache.encode()))
                 message = {**message, "headers": headers}
             await send(message)

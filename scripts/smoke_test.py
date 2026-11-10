@@ -131,10 +131,11 @@ def run(smoke: Smoke) -> None:
     s.headers = {"Authorization": f"Bearer {tokens['access_token']}"}
     s.check("GET", "/api/v1/auth/me", 200, has("username", "email"))
     s.check("GET", "/api/v1/auth/me", 401, auth=False, label="/api/v1/auth/me (sin token)")
+    s.check("GET", "/api/v1/auth/google/status", 200, has("enabled"), auth=False)
     s.check(
         "GET",
         "/api/v1/auth/google/login",
-        (307, 503),  # 307 hacia Google si hay credenciales; 503 si no están configuradas
+        (302, 503),  # 302 hacia Google si hay credenciales; 503 si no están configuradas
         auth=False,
         follow_redirects=False,
     )

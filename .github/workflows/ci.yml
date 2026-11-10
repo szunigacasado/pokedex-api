@@ -78,6 +78,21 @@ jobs:
           echo "### Cobertura (Python ${{ matrix.python-version }})" >> "$GITHUB_STEP_SUMMARY"
           coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
 
+  web:
+    name: Web (JavaScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      # Sin dependencias: el runner de tests de Node basta para la lógica de la web
+      - name: Tests de la web (node --test)
+        run: node --test "tests/web/*.test.mjs"
+
   security:
     name: Seguridad (secretos y dependencias)
     runs-on: ubuntu-latest

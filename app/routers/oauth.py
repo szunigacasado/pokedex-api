@@ -22,6 +22,7 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from jose import JWTError, jwt
+from pydantic import BaseModel
 from sqlmodel import select
 
 from app import rate_limit as rl
@@ -166,6 +167,18 @@ def _resolve_user(session: SessionDep, identity: GoogleIdentity) -> tuple[User, 
 # ═════════════════════════════════════════════════════════════
 #  Endpoints
 # ═════════════════════════════════════════════════════════════
+class GoogleStatus(BaseModel):
+    enabled: bool
+
+
+@router.get("/status", response_model=GoogleStatus, summary="¿Está disponible Google?")
+@limiter.limit(rl.DEFAULT)
+def google_status(request: Request, response: Response) -> GoogleStatus:
+    """Indica si el servidor tiene configurado el inicio de sesión con Google, para que
+    un cliente solo muestre el botón cuando funciona. No revela ninguna credencial."""
+    return GoogleStatus(enabled=get_settings().google_enabled)
+
+
 @router.get(
     "/login",
     summary="Iniciar sesión con Google",
@@ -202,6 +215,8 @@ def google_login(request: Request, google: GoogleDep) -> RedirectResponse:
 @router.get(
     "/callback",
     summary="Vuelta desde Google",
+    # Solo la llama Google al terminar el login; probarla a mano desde /docs no tiene sentido.
+    include_in_schema=False,
     responses={
         400: {"description": "Flujo caducado, manipulado o cancelado"},
         401: {"description": "Google no ha validado la identidad"},

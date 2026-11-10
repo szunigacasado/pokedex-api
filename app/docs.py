@@ -45,9 +45,14 @@ def swagger_ui() -> HTMLResponse:
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="{SWAGGER_CSS[0]}" integrity="{SWAGGER_CSS[1]}"
         crossorigin="anonymous">
+  <link rel="stylesheet" href="/static/swagger-theme.css">
 </head>
 <body>
-  <div id="swagger-ui"></div>
+  <header class="docs-banner">
+    <a class="docs-banner__back" href="/">← Volver a la Pokédex</a>
+    <span class="docs-banner__title">Documentación de la API</span>
+  </header>
+  <main id="swagger-ui"></main>
   <script src="{SWAGGER_JS[0]}" integrity="{SWAGGER_JS[1]}" crossorigin="anonymous"></script>
   <script src="/static/swagger-init.js"></script>
 </body>
