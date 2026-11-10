@@ -184,6 +184,19 @@ La lógica de la web (cliente de la API, formatos y mensajes) se prueba con el r
 node --test "tests/web/*.test.mjs"
 ```
 
+### Datos de demostración
+
+Para enseñar la Pokédex con contenido sin preparar nada:
+
+```bash
+uv run python -m scripts.demo
+```
+
+- Crea el entrenador `demo` y muestra su contraseña, generada al azar. Con `--usuario` y `--password` se eligen ambos.
+- Le añade 47 Pokémon, 38 de ellos capturados en los últimos 10 días (así sale una racha de 10 días), 6 favoritos, apodos, notas y dos equipos.
+- Si ya existía, lo reinicia.
+- No llama a PokeAPI ni necesita el servidor en marcha: escribe en la base de datos de `DATABASE_URL` con los datos locales de Kanto.
+
 ### Prueba de humo contra la API en marcha
 
 Con la API arrancada (`uv run python -m app`), este script recorre **los 30 endpoints** con un usuario nuevo y comprueba el código de respuesta y el contenido de cada uno. Termina con un resumen como `41/41 comprobaciones correctas`:
@@ -522,6 +535,9 @@ La API sirve en `/` una web propia ([`app/web/`](app/web/)) para usarla sin cono
   - El usuario nunca ve tokens, IDs, JSON ni versiones.
   - La sesión se renueva sola.
   - Los errores llegan en lenguaje normal; un `429` muestra una cuenta atrás.
+- **Primeros pasos guiados.**
+  - Al crear la cuenta se abre un **tour** que resalta cada sección sobre la propia interfaz (se maneja con el teclado: flechas y Escape). Se puede repetir con «¿Cómo funciona?».
+  - El inicio muestra 9 **misiones de entrenador** (añadir, capturar, poner apodo, crear un equipo, pedir consejo a Oak, ver un variocolor…), con su progreso. Cada una enlaza a donde se cumple y avisa al completarla.
 - **Modo técnico** (botón ⚙, arriba). Abre un panel con cada petición en directo: método, ruta, código, milisegundos, `X-Request-ID` (para buscarla en el log) y el cupo de rate limiting que queda. Sirve para explicar qué pasa por debajo sin ensuciar la interfaz.
 - **Accesible:**
   - Se puede usar entera con el teclado, con un enlace para saltar al contenido y el foco siempre visible.

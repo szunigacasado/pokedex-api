@@ -3,6 +3,7 @@
 
 import { request } from "../api.js";
 import { el } from "../dom.js";
+import { markDone } from "../missions.js";
 import { busy, loader, pokemonCard, showError } from "../ui.js";
 import { collectionBadge } from "./search.js";
 
@@ -65,6 +66,7 @@ export async function showTeamAdvice(teamId, slot) {
   slot.replaceChildren(loader("El Profesor Oak está estudiando tu equipo…"));
   try {
     const advice = await request(`/api/v1/teams/${teamId}/advice`);
+    markDone("advice");
     slot.replaceChildren(
       oakBubble(
         advice.summary,
@@ -95,6 +97,7 @@ export async function renderOak(view) {
       answer.replaceChildren(loader("Consultando mis notas…"));
       try {
         const result = await request("/api/v1/pokemon/ask", { query: { q: question } });
+        markDone("ask");
         answer.replaceChildren(
           oakBubble(
             result.count

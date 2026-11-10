@@ -6,6 +6,7 @@ import { el } from "../dom.js";
 import { artworkUrl, displayName, matchesQuery, plural, typeLabel } from "../format.js";
 import { radar, weaknessHeatmap } from "../charts.js";
 import { loadCollection } from "../data.js";
+import { markDone } from "../missions.js";
 import { navigate } from "../router.js";
 import { busy, empty, loader, showError, toast, typeBadge, typeBadges } from "../ui.js";
 import { showTeamAdvice } from "./oak.js";
@@ -247,6 +248,7 @@ export async function renderTeamEditor(view, { id }) {
       try {
         if (isNew) {
           const created = await request("/api/v1/teams", { method: "POST", json: payload });
+          markDone("team");
           toast(`¡Equipo «${created.name}» creado!`, { type: "ok" });
           navigate(`/equipos/${created.id}`);
           return;
