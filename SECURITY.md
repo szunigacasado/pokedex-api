@@ -150,6 +150,8 @@ Con slowapi y una ventana deslizante ([`app/rate_limit.py`](app/rate_limit.py)).
 | Redirección abierta | La redirección de HTTP a HTTPS solo va a hosts de `ALLOWED_HOSTS`. | `test_redirect_refuses_unknown_hosts` |
 | IP falsificada con `X-Forwarded-For` | Sin proxy no se acepta de nadie. Con Docker, solo de la IP fija de Caddy. | `test_main_starts_https_and_the_redirect` y el job «Docker» de la CI |
 | Cabeceras de descarga | Los nombres de fichero se reducen a ASCII seguro en `Content-Disposition`. | `test_card_filename_is_safe` |
+| XSS en la web | <ul><li>CSP propia (`script-src 'self'`, sin `unsafe-inline` ni CDN).</li><li>El HTML no tiene código en línea.</li><li>Todo el texto (apodos, notas, nombres) se pinta con `textContent`: el JavaScript no usa `innerHTML`, `eval` ni `document.write`.</li></ul> | `test_index_is_served_with_its_own_strict_csp`, `test_index_has_no_inline_code`, `test_javascript_never_injects_html_or_evaluates_code` |
+| Robo de tokens en la web | <ul><li>El access token vive **solo en memoria**.</li><li>El refresh token va en `sessionStorage` (dura lo que la pestaña) y rota en cada uso.</li><li>Varias peticiones con 401 comparten una única renovación, para no disparar la detección de reutilización.</li><li>Los tokens de Google llegan en el fragmento de la URL, que no se envía a ningún servidor, y se borran del historial al leerlos.</li></ul> | `tests/web/api.test.mjs` |
 
 ### Cadena de suministro
 
