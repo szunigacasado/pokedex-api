@@ -184,6 +184,18 @@ La lógica de la web (cliente de la API, formatos y mensajes) se prueba con el r
 node --test "tests/web/*.test.mjs"
 ```
 
+### Prueba de humo contra la API en marcha
+
+Con la API arrancada (`uv run python -m app`), este script recorre **los 30 endpoints** con un usuario nuevo y comprueba el código de respuesta y el contenido de cada uno. Termina con un resumen como `41/41 comprobaciones correctas`:
+
+```bash
+uv run python -m scripts.smoke_test
+```
+
+- Por defecto prueba `https://localhost` confiando en `certs/ca.pem`. Para otra dirección: `--base-url http://127.0.0.1:8000`.
+- Al acabar, borra lo que ha creado y cierra la sesión.
+- La CI lo ejecuta en cada PR contra los contenedores de Docker, a través de Caddy.
+
 ### Integración continua
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) se ejecuta en cada *push* a `main` o `develop` y en cada *pull request*. Un PR con la CI en rojo no se integra.
