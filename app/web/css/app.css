@@ -2098,3 +2098,93 @@ body.has-tech-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ═════════════════════════════════════════════════════════════
+   Tour de primeros pasos y misiones
+   ═════════════════════════════════════════════════════════════ */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+}
+
+.tour__spot {
+  position: fixed;
+  border-radius: 14px;
+  box-shadow: 0 0 0 9999px rgb(8 12 22 / 72%);
+  outline: 3px solid var(--yellow);
+  transition: top 250ms ease, left 250ms ease, width 250ms ease, height 250ms ease;
+  pointer-events: none;
+}
+
+.tour__box {
+  position: fixed;
+  width: min(360px, calc(100vw - 32px));
+  padding: 1.2rem;
+  border-radius: var(--radius);
+  background: var(--screen);
+  color: var(--text);
+  border: 3px solid var(--yellow);
+  box-shadow: var(--shadow-lg);
+  outline: none;
+  animation: toast-in var(--speed) ease-out;
+}
+
+/* Paso sin elemento que resaltar: cuadro centrado sobre el fondo oscurecido */
+.tour__box--center {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 9999px rgb(8 12 22 / 72%), var(--shadow-lg);
+}
+
+.tour__counter {
+  margin: 0 0 0.2rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--red);
+}
+
+.missions__count {
+  font-weight: 900;
+  color: var(--red);
+}
+
+.missions__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.6rem;
+}
+
+.mission {
+  display: grid;
+  grid-template-columns: 2.2rem 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  background: var(--screen);
+  border: 2px solid var(--border);
+}
+
+.mission p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.mission__icon {
+  font-size: 1.4rem;
+  text-align: center;
+}
+
+.mission--done {
+  border-color: color-mix(in srgb, var(--ok) 60%, var(--border));
+  background: color-mix(in srgb, var(--ok) 10%, var(--screen));
+}
+
+.mission--done strong {
+  color: var(--ok);
+}
