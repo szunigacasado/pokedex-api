@@ -12,6 +12,7 @@ import { STAT_LABELS, artworkUrl, displayName, typeLabel } from "../format.js";
 import { addToCollection, entryFor, loadCollection } from "../data.js";
 import { icon } from "../icons.js";
 import { markDone } from "../missions.js";
+import { sfx } from "../sound.js";
 import { busy, empty, loader, showError, toast, typeBadge, typeBadges } from "../ui.js";
 
 const EXAMPLES = [
@@ -131,6 +132,7 @@ function addToPokedexButton(pokemon, onDone) {
     busy(button, async () => {
       try {
         await addToCollection(pokemon.id);
+        sfx("capture");
         toast(`${displayName(pokemon.name)} está en tu Pokédex.`, { type: "ok" });
         onDone?.();
       } catch (error) {
@@ -162,6 +164,7 @@ export async function recommendationsSection(team, { onTeamChange } = {}) {
           if (!entryFor(pokemon.id)) await addToCollection(pokemon.id);
           const ids = [...team.members.map((m) => m.pokemon_id), pokemon.id];
           await request(`/api/v1/teams/${team.id}`, { method: "PUT", json: { pokemon_ids: ids } });
+          sfx("capture");
           toast(`${displayName(pokemon.name)} se une a «${team.name}».`, { type: "ok" });
           onTeamChange?.();
         } catch (error) {

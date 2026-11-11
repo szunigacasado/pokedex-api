@@ -50,6 +50,7 @@ const ICONS = {
   pokeball: [["circle", { cx: 12, cy: 12, r: 9 }], ["path", { d: "M3 12h6m6 0h6" }], ["circle", { cx: 12, cy: 12, r: 3 }]],
   download: [["line", { x1: 12, y1: 4, x2: 12, y2: 15 }], ["polyline", { points: "7 10 12 15 17 10" }], ["path", { d: "M5 20h14" }]],
   volume: [["polygon", { points: "4 9 8 9 13 5 13 19 8 15 4 15" }], ["path", { d: "M16.5 8.5a5 5 0 0 1 0 7" }], ["path", { d: "M19.5 5.5a9 9 0 0 1 0 13" }]],
+  "volume-x": [["polygon", { points: "4 9 8 9 13 5 13 19 8 15 4 15" }], ["line", { x1: 17, y1: 9, x2: 22, y2: 14 }], ["line", { x1: 22, y1: 9, x2: 17, y2: 14 }]],
   music: [["path", { d: "M9 18V5l11-2v13" }], ["circle", { cx: 6, cy: 18, r: 3 }], ["circle", { cx: 17, cy: 16, r: 3 }]],
   sparkles: [["path", { d: "M11 3l1.8 5.2L18 10l-5.2 1.8L11 17l-1.8-5.2L4 10l5.2-1.8z" }], ["path", { d: "M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z" }]],
   stop: [["rect", { x: 7, y: 7, width: 10, height: 10, rx: 1.5 }]],

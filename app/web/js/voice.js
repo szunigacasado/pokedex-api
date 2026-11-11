@@ -1,11 +1,8 @@
 // La Pokédex que habla: lee en voz alta con la síntesis de voz del navegador (sin
-// servicios externos ni coste) y reproduce el grito de cada Pokémon.
+// servicios externos ni coste).
 
-const CRIES = "https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/latest";
-
-export function cryUrl(id) {
-  return `${CRIES}/${id}.ogg`;
-}
+// Los gritos, con fundido de entrada y de salida, están en sound.js.
+export { cryUrl, playCry } from "./sound.js";
 
 export function canSpeak() {
   return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
@@ -46,24 +43,5 @@ export function speak(text, { onEnd } = {}) {
   return true;
 }
 
-let currentCry = null;
-
-/** Reproduce el grito. Devuelve false si el navegador no puede (Safari no lee OGG). */
-export async function playCry(id, { volume = 0.5 } = {}) {
-  currentCry?.pause();
-  const audio = new Audio(cryUrl(id));
-  audio.volume = volume;
-  currentCry = audio;
-  try {
-    await audio.play();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // Al cambiar de pantalla, la Pokédex se calla.
-window.addEventListener("hashchange", () => {
-  stopSpeaking();
-  currentCry?.pause();
-});
+window.addEventListener("hashchange", stopSpeaking);
