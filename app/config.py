@@ -154,6 +154,11 @@ class Settings(BaseSettings):
     hsts_max_age_seconds: int = Field(default=63_072_000, ge=0)  # 2 años
     docs_enabled: bool = Field(default=True, description="Publicar /docs, /redoc y /openapi.json")
     web_enabled: bool = Field(default=True, description="Publicar la web de la Pokédex en /")
+    client_ip_header: str = Field(
+        default="",
+        description="Cabecera con la IP real que escribe el proxy por el que se llega a la "
+        "API (cf-connecting-ip en el despliegue). Vacío = la IP de la conexión.",
+    )
 
     # ── Servidor HTTPS (``python -m app``) ───────────────────
     server_host: str = Field(

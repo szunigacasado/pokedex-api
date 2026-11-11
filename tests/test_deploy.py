@@ -71,5 +71,49 @@ def test_render_only_deploys_main_after_the_ci() -> None:
     assert env["ENVIRONMENT"]["value"] == "production"
     assert env["SECRET_KEY"] == {"key": "SECRET_KEY", "generateValue": True}
     # Ningún secreto escrito en el fichero
+    assert env["CLIENT_IP_HEADER"]["value"] == "cf-connecting-ip"
     for key in ("DATABASE_URL", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GROQ_API_KEY"):
         assert env[key] == {"key": key, "sync": False}
+
+
+async def seen_by_the_app(headers: list[tuple[bytes, bytes]], kind: str = "http") -> tuple:
+    from app.security_middleware import TrustedProxyMiddleware
+
+    seen = {}
+
+    async def app(scope, receive, send):
+        seen.update(client=scope["client"][0], scheme=scope["scheme"])
+
+    scope = {"type": kind, "client": ("10.1.2.3", 5000), "scheme": "http", "headers": headers}
+    if kind == "websocket":
+        scope["scheme"] = "ws"
+    await TrustedProxyMiddleware(app, "CF-Connecting-IP")(scope, None, None)
+    return seen["client"], seen["scheme"]
+
+
+async def test_the_real_ip_comes_from_the_proxy_header() -> None:
+    headers = [
+        (b"x-forwarded-for", b"6.6.6.6, 203.0.113.9"),  # el primero lo escribe el cliente
+        (b"cf-connecting-ip", b"203.0.113.9"),
+        (b"x-forwarded-proto", b"https"),
+    ]
+    assert await seen_by_the_app(headers) == ("203.0.113.9", "https")
+    assert await seen_by_the_app(headers, "websocket") == ("203.0.113.9", "wss")
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        [(b"x-forwarded-for", b"6.6.6.6"), (b"x-forwarded-proto", b"https")],  # sin la cabecera
+        [(b"cf-connecting-ip", b"no-es-una-ip"), (b"x-forwarded-proto", b"https")],
+    ],
+)
+async def test_without_a_valid_proxy_header_nothing_is_trusted(headers) -> None:
+    assert await seen_by_the_app(headers) == ("10.1.2.3", "http")
+
+
+def test_the_proxy_middleware_is_off_by_default() -> None:
+    from app.main import app
+    from app.security_middleware import TrustedProxyMiddleware
+
+    assert all(m.cls is not TrustedProxyMiddleware for m in app.user_middleware)
