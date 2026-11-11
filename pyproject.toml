@@ -76,4 +76,5 @@ allowed-confusables = ["×"]
 "tests/**" = [
   "S101",         # en los tests se usa assert
   "S105", "S106", # credenciales ficticias de prueba
+  "S311",         # random con semilla para combates reproducibles
 ]

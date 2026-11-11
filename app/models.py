@@ -764,3 +764,85 @@ class TeamAnalysis(SQLModel):
     )
     not_covered: list[str]
     highlights: list[str] = Field(description="Conclusiones en español calculadas con reglas.")
+
+
+# ═════════════════════════════════════════════════════════════
+#  Combates, experiencia y niveles
+# ═════════════════════════════════════════════════════════════
+class PokemonProgress(SQLModel, table=True):
+    """Nivel y experiencia de un Pokémon de la Pokédex. Tabla aparte de PokedexEntry para
+    no tener que migrar la existente: se crea sola y, si falta la fila, es nivel 10."""
+
+    entry_id: int = Field(primary_key=True, foreign_key="pokedexentry.id", ondelete="CASCADE")
+    level: int = Field(default=10, ge=1, le=100)
+    xp: int = Field(default=0, ge=0)
+    battles: int = Field(default=0, ge=0)
+    wins: int = Field(default=0, ge=0)
+
+
+class Battle(SQLModel, table=True):
+    """Un combate. No se guarda su estado, sino la semilla, la foto inicial de los equipos
+    y las acciones: el estado se reconstruye repitiéndolas (el motor es determinista)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    trainer_id: int = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
+    team_id: int | None = Field(default=None, foreign_key="team.id", ondelete="SET NULL")
+    mode: str = Field(default="cpu", max_length=10)
+    seed: int
+    setup: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    actions: list[Any] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    status: str = Field(default="active", max_length=10, index=True)
+    opponent_name: str = Field(max_length=100)
+    rewards: list[Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
+    finished_at: datetime | None = Field(default=None, sa_type=UTCDateTime)
+
+
+class BattleCreate(SQLModel):
+    team_id: int = Field(ge=1)
+    difficulty: Literal["easy", "normal", "hard"] = "normal"
+    theme: TypeName | None = Field(default=None, description="Tipo del rival; vacío = variado.")
+
+
+class BattleAction(SQLModel):
+    type: Literal["move", "switch"]
+    index: int | None = Field(default=None, ge=0, le=3, description="Ataque (si type=move).")
+    to: int | None = Field(default=None, ge=0, le=5, description="Pokémon al que cambiar.")
+
+
+class BattleReward(SQLModel):
+    entry_id: int
+    pokemon_id: int
+    name: str
+    xp_gained: int
+    level_before: int
+    level_after: int
+    evolves_to: str | None = Field(default=None, description="Puede evolucionar ya.")
+
+
+class BattleView(SQLModel):
+    id: int
+    status: Literal["active", "won", "lost", "draw", "forfeit"]
+    turn: int
+    you: dict[str, Any]
+    rival: dict[str, Any]
+    actions: dict[str, Any] | None = Field(description="Lo que puedes hacer; null si terminó.")
+    events: list[dict[str, Any]] = Field(description="Lo que ha pasado en el último turno.")
+    rewards: list[BattleReward] | None = None
+
+
+class BattleSummary(SQLModel):
+    id: int
+    status: str
+    opponent_name: str
+    mode: str
+    created_at: datetime
+
+
+class ProgressRead(SQLModel):
+    entry_id: int
+    level: int
+    xp: int
+    xp_to_next: int
+    battles: int
+    wins: int
