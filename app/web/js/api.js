@@ -66,6 +66,15 @@ export function clearSession() {
   if (wasLoggedIn) events.dispatchEvent(new CustomEvent("session", { detail: { loggedIn: false } }));
 }
 
+/**
+ * Access token vigente para abrir un WebSocket (que no pasa por request()): si está a
+ * punto de caducar, se renueva antes. Nunca se guarda ni se pone en una URL.
+ */
+export async function socketToken() {
+  if (accessTokenSecondsLeft() < 30 && storedRefreshToken()) await refreshSession();
+  return accessToken;
+}
+
 /** Recupera la sesión de esta pestaña tras una recarga. */
 export async function restoreSession() {
   if (!storedRefreshToken()) return false;
