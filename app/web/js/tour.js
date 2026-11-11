@@ -12,8 +12,9 @@ export const STEPS = [
   { target: '.nav__link[href="#/pokedex"]', title: "2 · Tu colección", text: "Los Pokémon que añades vienen aquí. Márcalos como capturados, ponles apodo o descárgalos en PDF." },
   { target: '.nav__link[href="#/equipos"]', title: "3 · Arma tu equipo", text: "Junta hasta seis y descubre sus puntos fuertes y débiles en un mapa de colores." },
   { target: '.nav__link[href="#/oak"]', title: "4 · El Profesor Oak", text: "Pregúntale con tus palabras («los 3 de fuego más rápidos») o pídele consejo sobre tu equipo." },
-  { target: '.nav__link[href="#/estadisticas"]', title: "5 · Tu progreso", text: "Gráficos con lo que llevas capturado, tus rachas y tus tipos favoritos." },
-  { target: "#tech-toggle", title: "6 · Modo técnico", text: "¿Curiosidad? Enciéndelo y verás cada petición que la web hace a la API REST, en directo." },
+  { target: '.nav__link[href="#/juego"]', title: "5 · A jugar", text: "Adivina la silueta de un Pokémon. Si aciertas, lo capturas para tu Pokédex." },
+  { target: '.nav__link[href="#/estadisticas"]', title: "6 · Tu progreso", text: "Gráficos con lo que llevas capturado, tus rachas y tus tipos favoritos." },
+  { target: "#tech-toggle", title: "7 · Modo técnico", text: "¿Curiosidad? Enciéndelo y verás cada petición que la web hace a la API REST, en directo." },
   { target: "#missions", title: "¡Tu primera misión!", text: "Completa estas misiones para dominar la Pokédex. Empieza por buscar un Pokémon y añadirlo." },
 ];
 
