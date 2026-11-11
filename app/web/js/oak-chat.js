@@ -314,6 +314,14 @@ export function createChat({ compact = false } = {}) {
 // ═════════════════════════════════════════════════════════════
 //  Botón flotante y panel lateral (todas las pantallas)
 // ═════════════════════════════════════════════════════════════
+let openPanel = null;
+
+/** Abre el panel de Oak (desde cualquier pantalla) y, si se indica, le pregunta algo. */
+export function openOak(question = null) {
+  openPanel?.(true);
+  if (question) askOak(question);
+}
+
 export function initOakPanel() {
   const fab = el("button", { type: "button", class: "oak-fab", "aria-expanded": "false", "aria-controls": "oak-drawer", hidden: true }, icon("flask"), el("span", {}, "Oak"));
   const close = el("button", { type: "button", class: "icon-btn", "aria-label": "Cerrar el chat de Oak" }, icon("x"));
@@ -343,6 +351,7 @@ export function initOakPanel() {
     if (!visible && !drawer.hidden) setOpen(false);
   }
 
+  openPanel = setOpen;
   fab.addEventListener("click", () => setOpen(drawer.hidden));
   close.addEventListener("click", () => {
     setOpen(false);
