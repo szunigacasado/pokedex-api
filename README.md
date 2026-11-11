@@ -599,7 +599,8 @@ La API sirve en `/` una web propia ([`app/web/`](app/web/)) para usarla sin cono
 - **Segura por construcción.** Medidas en [`SECURITY.md`](SECURITY.md#más-allá-del-top-10):
   - CSP propia, sin scripts ni estilos en línea y sin CDN.
   - Todo el texto se pinta con `textContent`, nunca con `innerHTML`; un test lo comprueba en cada fichero.
-  - El access token solo vive en memoria.
+  - El access token solo vive en memoria y el refresh token, en una cookie `HttpOnly` que ningún script puede leer.
+- **Sesión compartida con `/docs`.** Si inicias sesión con *Authorize* en Swagger, la web te reconoce al abrirla. La cookie solo se acepta desde el propio sitio, para que otra web no pueda usarla (CSRF).
 
 ### Otras decisiones
 
