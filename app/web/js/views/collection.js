@@ -3,7 +3,7 @@
 import { download } from "../api.js";
 import { el } from "../dom.js";
 import { dexNumber, displayName, formatDate, plural } from "../format.js";
-import { loadCollection, onCollectionChange, releaseEntry, updateEntry } from "../data.js";
+import { levelOf, loadCollection, loadProgress, onCollectionChange, releaseEntry, updateEntry } from "../data.js";
 import { sfx } from "../sound.js";
 import { busy, empty, loader, openModal, pokemonCard, showError, toast, typeBadges } from "../ui.js";
 import { badgeLegend, collectionBadge } from "./search.js";
@@ -102,7 +102,7 @@ function editor(entry, close) {
 
 export async function renderCollection(view) {
   view.replaceChildren(loader("Abriendo tu Pokédex…"));
-  let latest = await loadCollection();
+  let [latest] = await Promise.all([loadCollection(), loadProgress().catch(() => null)]);
   const state = { filter: "all", sort: "number" };
   const draw = () => drawFrom(latest);
 
@@ -171,6 +171,7 @@ export async function renderCollection(view) {
                 sprite: entry.pokemon_sprite,
                 types: entry.pokemon_types,
                 badge: collectionBadge(entry.pokemon_id),
+                level: levelOf(entry.id),
                 label: `${entry.nickname ? `${entry.nickname}, ` : ""}${displayName(entry.pokemon_name)}: editar`,
                 onClick: () => {
                   const dialog = openModal(editor(entry, () => dialog.close()), { label: `Editar ${displayName(entry.pokemon_name)}` });
