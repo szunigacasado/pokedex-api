@@ -2,7 +2,7 @@
 
 import { route } from "./router.js";
 import { renderCollection } from "./views/collection.js";
-import { renderBattle, renderBattleLobby } from "./views/battle.js";
+import { renderBattle, renderBattleLobby, renderFriendBattle } from "./views/battle.js";
 import { voiceButtons } from "./views/extras.js";
 import { renderGame } from "./views/game.js";
 import { renderOak } from "./views/oak.js";
@@ -23,6 +23,7 @@ export function registerScreens() {
   route("/equipos/nuevo", { title: "Nuevo equipo", render: renderTeamEditor, parent: "/equipos" });
   route("/equipos/:id", { title: "Equipo", render: renderTeamEditor, parent: "/equipos" });
   route("/combate", { title: "Combate", render: renderBattleLobby, nav: { label: "Combate", icon: "bolt", order: 35, hint: "Gana experiencia y evoluciona" } });
+  route("/combate/amigo/:code", { title: "Combate contra un amigo", render: renderFriendBattle, parent: "/combate" });
   route("/combate/:id", { title: "Combate", render: renderBattle, parent: "/combate" });
   route("/oak", { title: "Profesor Oak", render: renderOak, nav: { label: "Profesor Oak", icon: "flask", order: 40, hint: "Pregúntale con tus palabras" } });
   route("/juego", { title: "Adivina la silueta", render: renderGame, nav: { label: "Juego", icon: "gamepad", order: 50, hint: "Adivina la silueta y captura" } });

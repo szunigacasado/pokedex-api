@@ -32,7 +32,8 @@ from app.models import (
 from app.rate_limit import limiter
 from app.routers.teams import _members_detail, _owned_team, _to_read
 from app.services.battle import Battle as Engine
-from app.services.battle import Fighter, Side
+from app.services.battle import Fighter, Side, from_side
+from app.services.pokeapi_service import PokeAPIService
 from app.services.progress import (
     DEFAULT_LEVEL,
     apply_xp,
@@ -68,8 +69,10 @@ def build_engine(battle: Battle) -> tuple[Engine, list[dict[str, Any]]]:
     engine = Engine(sides, seed=battle.seed)
     events: list[dict[str, Any]] = []
     for action in battle.actions:
-        events = engine.play_turn({YOU: action})
-    return engine, events
+        # Contra un amigo se guardan las dos acciones de cada turno: {"0": …, "1": …}
+        turn = {int(k): v for k, v in action.items()} if battle.mode == "friend" else {YOU: action}
+        events = engine.play_turn(turn)
+    return engine, from_side(events, battle.setup.get("you", YOU))
 
 
 def _owned_battle(session: Session, user: User, battle_id: int) -> Battle:
@@ -86,13 +89,14 @@ def _progress(session: Session, entry_id: int) -> PokemonProgress:
 
 
 def _view(battle: Battle, engine: Engine, events: list[dict[str, Any]]) -> BattleView:
+    you = battle.setup.get("you", YOU)  # contra un amigo, cada uno ve el combate desde su lado
     return BattleView(
         id=battle.id,
         status=battle.status,
         turn=engine.turn,
-        you=engine.side_view(YOU),
-        rival=engine.side_view(RIVAL),
-        actions=engine.actions(YOU) if battle.status == "active" else None,
+        you=engine.side_view(you),
+        rival=engine.side_view(1 - you),
+        actions=engine.actions(you) if battle.status == "active" else None,
         events=events,
         rewards=None if battle.rewards is None else [BattleReward(**r) for r in battle.rewards],
     )
@@ -107,11 +111,18 @@ async def _grant_rewards(
     """Experiencia para cada Pokémon que ha salido al campo. Se aplica una sola vez."""
     if battle.rewards is not None:
         return
-    won = battle.status == "won"
-    defeated = [f.level for f in engine.sides[RIVAL].fighters if not f.alive]
+    battle.rewards = await side_rewards(session, engine, YOU, battle.status == "won", pokeapi)
+    battle.finished_at = utc_now()
+
+
+async def side_rewards(
+    session: Session, engine: Engine, side: int, won: bool, pokeapi: PokeAPIService
+) -> list[dict[str, Any]]:
+    """Suma la experiencia a los Pokémon del bando ``side`` que han salido al campo."""
+    defeated = [f.level for f in engine.sides[1 - side].fighters if not f.alive]
     gained = battle_xp(defeated, won)
     rewards = []
-    for fighter in engine.sides[YOU].fighters:
+    for fighter in engine.sides[side].fighters:
         if fighter.entry_id is None or not fighter.took_part:
             continue
         if session.get(PokedexEntry, fighter.entry_id) is None:
@@ -139,14 +150,32 @@ async def _grant_rewards(
                 "evolves_to": evolves_to,
             }
         )
-    battle.rewards = rewards
-    battle.finished_at = utc_now()
+    return rewards
 
 
 def _finish_status(engine: Engine) -> str:
     if engine.draw:
         return "draw"
     return "won" if engine.winner == YOU else "lost"
+
+
+async def team_fighters(
+    session: Session, user: User, team_id: int, pokeapi: PokeAPIService
+) -> tuple[Any, list[dict[str, Any]]]:
+    """El equipo y sus Pokémon listos para combatir, con su nivel actual."""
+    team = _to_read(_owned_team(session, user, team_id))
+    if not team.members:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="El equipo está vacío.")
+    details = await _members_detail(pokeapi, team)
+    fighters = []
+    for member, pokemon in zip(team.members, details, strict=True):
+        level = _progress(session, member.pokedex_entry_id).level
+        fighters.append(
+            fighter_setup(
+                pokemon, level, nickname=member.nickname, entry_id=member.pokedex_entry_id
+            )
+        )
+    return team, fighters
 
 
 # ═════════════════════════════════════════════════════════════
@@ -171,18 +200,7 @@ async def start_battle(
     """Tu equipo contra un rival de la máquina con tantos Pokémon como el tuyo y de un
     nivel parecido (fácil: 3 por debajo; difícil: 3 por encima). `theme` elige el tipo
     del rival (por ejemplo `water`)."""
-    team = _to_read(_owned_team(session, user, payload.team_id))
-    if not team.members:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="El equipo está vacío.")
-    details = await _members_detail(pokeapi, team)
-    mine = []
-    for member, pokemon in zip(team.members, details, strict=True):
-        level = _progress(session, member.pokedex_entry_id).level
-        mine.append(
-            fighter_setup(
-                pokemon, level, nickname=member.nickname, entry_id=member.pokedex_entry_id
-            )
-        )
+    team, mine = await team_fighters(session, user, payload.team_id, pokeapi)
     seed = secrets.randbits(32)
     legendary, _ = pokeapi.fallback.special_ids()
     rival = generate_rival(

@@ -30,6 +30,13 @@ def play_to_the_end(client: TestClient, headers: dict, battle: dict) -> dict:
     raise AssertionError("el combate no termina")
 
 
+@pytest.fixture(autouse=True)
+def fixed_seed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Semilla fija: los tests de la API no dependen de lo que salga al azar (un combate con
+    dos Pokémon inmunes entre sí duraría el máximo de turnos)."""
+    monkeypatch.setattr(battles_router.secrets, "randbits", lambda _bits: 20261111)
+
+
 @pytest.fixture
 def no_evolutions(monkeypatch: pytest.MonkeyPatch) -> None:
     async def none(*_):

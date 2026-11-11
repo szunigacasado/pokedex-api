@@ -57,6 +57,15 @@ export function clearSession() {
   if (wasLoggedIn) events.dispatchEvent(new CustomEvent("session", { detail: { loggedIn: false } }));
 }
 
+/**
+ * Access token vigente para abrir un WebSocket (que no pasa por request()): si está a
+ * punto de caducar, se renueva antes con la cookie. Nunca se guarda ni se pone en una URL.
+ */
+export async function socketToken() {
+  if (accessTokenSecondsLeft() < 30) await refreshSession();
+  return accessToken;
+}
+
 /** Recupera la sesión con la cookie: tras una recarga, o si se entró desde /docs. */
 export async function restoreSession() {
   try {

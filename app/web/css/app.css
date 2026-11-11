@@ -2873,3 +2873,93 @@ h2.result {
   font-weight: 900;
   animation: toast-in 400ms ease-out;
 }
+
+/* Contra un amigo */
+.friend-panel h2 {
+  gap: 0.5rem;
+}
+
+.friend-panel__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.2rem;
+  align-items: start;
+}
+
+.input--code {
+  max-width: 11rem;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.history__friend {
+  display: inline-flex;
+  color: var(--muted);
+}
+
+.waiting-room {
+  justify-items: center;
+  text-align: center;
+}
+
+.waiting-room .field {
+  width: min(560px, 100%);
+  text-align: left;
+}
+
+.room-code {
+  padding: 0.4rem 1.2rem;
+  border-radius: var(--radius);
+  border: 3px dashed var(--yellow);
+  background: var(--surface-2);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: clamp(2rem, 8vw, 3.2rem);
+  font-weight: 900;
+  letter-spacing: 0.25em;
+  user-select: all;
+}
+
+.room-code--inline {
+  display: inline-block;
+  padding: 0 0.4rem;
+  font-size: 1rem;
+  border-width: 2px;
+}
+
+.waiting-room__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 800;
+}
+
+.pulse-dot {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  50% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot {
+    animation: none;
+  }
+}
+
+.battle-msg__status {
+  margin: 0.3rem 0 0;
+  min-height: 1.2em;
+  font-weight: 700;
+  color: #475569;
+}

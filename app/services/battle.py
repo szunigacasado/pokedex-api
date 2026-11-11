@@ -318,3 +318,19 @@ class Battle:
             "active": side.active,
             "fighters": [f.view(i) for i, f in enumerate(side.fighters)],
         }
+
+
+def from_side(events: list[dict[str, Any]], side: int) -> list[dict[str, Any]]:
+    """Los sucesos vistos por el jugador ``side``: su bando pasa a ser el 0 y el rival el 1.
+    Así la web anima igual un combate contra la máquina que contra un amigo."""
+    if side == 0:
+        return events
+    flipped = []
+    for event in events:
+        event = dict(event)
+        if "side" in event:
+            event["side"] = 1 - event["side"]
+        if event.get("type") == "end" and event.get("winner") is not None:
+            event["winner"] = 1 - event["winner"]
+        flipped.append(event)
+    return flipped

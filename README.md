@@ -433,6 +433,20 @@ El nombre del archivo se genera en ASCII (`equipo-equipo-elite-20261109.pdf`), p
   - El más rápido ataca primero.
 - **Experiencia**: cada Pokémon que sale al campo gana experiencia por rival debilitado, con un ×1,5 si se gana. Los niveles se guardan en una tabla aparte, así que la base de datos existente no necesita migraciones.
 
+#### Contra un amigo, en directo
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/pvp/rooms` 🔒 | Crea un reto con tu equipo (`{"team_id": 1}`) y devuelve un **código** de 6 caracteres que caduca en 15 minutos. |
+| `WS` | `/pvp/ws` | El combate en directo. El primer mensaje autentica (`{"type": "auth", "token": "…"}`) y el segundo entra en el reto (`{"type": "join", "code": "ABC234", "team_id": 2}`; el equipo solo lo indica quien acepta). |
+
+- **El servidor es el árbitro** ([`pvp.py`](app/routers/pvp.py)): recibe la acción de cada uno, espera a tener las dos y resuelve el turno con el mismo motor que contra la máquina. Cada jugador lo recibe **desde su lado** (su equipo siempre es el `0`), así que la web pinta igual los dos modos.
+- Mensajes del servidor: `waiting` (esperando rival), `start`, `waiting_rival`, `rival_ready`, `turn`, `end` (con la experiencia), `rival_left` y `error`.
+- **Quien se desconecta pierde**: nadie se libra de una derrota cerrando la pestaña.
+- Al terminar, el combate queda en el historial de los dos y se puede volver a ver con `GET /battles/{id}`.
+- En la web: **Combate → Contra un amigo**. Se crea el reto y se comparte el enlace (`#/combate/amigo/CÓDIGO`) o el código.
+- Las salas viven en la memoria del servidor (suficiente para una instancia; con varias réplicas se compartirían con Redis).
+
 ### Profesor Oak: IA (`/api/v1`)
 
 | Método | Ruta | Descripción |
