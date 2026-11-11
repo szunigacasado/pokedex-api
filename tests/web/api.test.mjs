@@ -2,16 +2,19 @@
 import assert from "node:assert/strict";
 import { beforeEach, test } from "node:test";
 
-// Entorno mínimo de navegador
+// Entorno mínimo de navegador. El almacenamiento está aquí para comprobar que la web
+// NO guarda ningún token en él.
 const store = new Map();
+const storage = {
+  getItem: (k) => (store.has(k) ? store.get(k) : null),
+  setItem: (k, v) => store.set(k, String(v)),
+  removeItem: (k) => store.delete(k),
+};
 globalThis.window = {
   location: { origin: "http://pokedex.test", hash: "", pathname: "/" },
   history: { replaceState: (_, __, url) => { globalThis.window.location.hash = url.slice(url.indexOf("#")); } },
-  sessionStorage: {
-    getItem: (k) => (store.has(k) ? store.get(k) : null),
-    setItem: (k, v) => store.set(k, String(v)),
-    removeItem: (k) => store.delete(k),
-  },
+  sessionStorage: storage,
+  localStorage: storage,
 };
 
 const api = await import("../../app/web/js/api.js");
@@ -42,14 +45,14 @@ beforeEach(() => {
   api.clearSession();
 });
 
-test("el login guarda el access token en memoria y el refresh en sessionStorage", async () => {
+test("el login guarda el access token solo en memoria; el refresh lo guarda la cookie", async () => {
   replies.push(reply(200, PAIR));
   await api.login("ash", "Pikachu123");
 
   assert.equal(api.isLoggedIn(), true);
-  assert.equal(store.get("pokedex.refresh"), "ref-1");
-  assert.ok(![...store.values()].includes("acc-1"), "el access token no se guarda en ningún almacén");
+  assert.equal(store.size, 0, "ningún token en sessionStorage ni localStorage");
   assert.equal(calls[0].body.toString(), "username=ash&password=Pikachu123");
+  assert.equal(calls[0].credentials, "same-origin"); // para recibir la cookie de sesión
 });
 
 test("las peticiones autenticadas llevan el token Bearer", async () => {
@@ -62,21 +65,32 @@ test("las peticiones autenticadas llevan el token Bearer", async () => {
   assert.equal(calls[0].auth, "Bearer acc-1");
 });
 
+test("recuperar la sesión usa la cookie: sin cuerpo y sin token en JavaScript", async () => {
+  replies.push(reply(200, PAIR));
+
+  assert.equal(await api.restoreSession(), true);
+  assert.equal(calls[0].url, "http://pokedex.test/api/v1/auth/refresh");
+  assert.equal(calls[0].method, "POST");
+  assert.equal(calls[0].body, undefined);
+  assert.equal(api.isLoggedIn(), true);
+});
+
+test("sin cookie válida no hay sesión", async () => {
+  replies.push(reply(401, { detail: "no" }));
+
+  assert.equal(await api.restoreSession(), false);
+  assert.equal(api.isLoggedIn(), false);
+});
+
 test("ante un 401 renueva la sesión una vez y repite la petición", async () => {
   api.setSession(PAIR);
-  replies.push(
-    reply(401, { detail: "caducado" }),
-    reply(200, { ...PAIR, access_token: "acc-2", refresh_token: "ref-2" }),
-    reply(200, { ok: true }),
-  );
+  replies.push(reply(401, { detail: "caducado" }), reply(200, { ...PAIR, access_token: "acc-2" }), reply(200, { ok: true }));
 
   const result = await api.request("/api/v1/pokedex");
 
   assert.deepEqual(result, { ok: true });
   assert.equal(calls[1].url, "http://pokedex.test/api/v1/auth/refresh");
-  assert.equal(JSON.parse(calls[1].body).refresh_token, "ref-1");
   assert.equal(calls[2].auth, "Bearer acc-2");
-  assert.equal(store.get("pokedex.refresh"), "ref-2"); // rotado
 });
 
 test("si no se puede renovar, cierra la sesión", async () => {
@@ -87,7 +101,6 @@ test("si no se puede renovar, cierra la sesión", async () => {
 
   await assert.rejects(api.request("/api/v1/pokedex"), { status: 401 });
   assert.equal(api.isLoggedIn(), false);
-  assert.equal(store.has("pokedex.refresh"), false);
   assert.equal(loggedOut, true);
 });
 
@@ -97,7 +110,7 @@ test("varias peticiones con 401 comparten una sola renovación", async () => {
   const handler = (url) => {
     if (String(url).endsWith("/auth/refresh")) {
       refreshes += 1;
-      return reply(200, { ...PAIR, access_token: "acc-2", refresh_token: "ref-2" });
+      return reply(200, { ...PAIR, access_token: "acc-2" });
     }
     return calls.filter((c) => c.url === String(url)).length === 1 ? reply(401, {}) : reply(200, { url: String(url) });
   };
@@ -105,7 +118,18 @@ test("varias peticiones con 401 comparten una sola renovación", async () => {
 
   await Promise.all([api.request("/api/v1/a"), api.request("/api/v1/b")]);
 
-  assert.equal(refreshes, 1, "reutilizar el refresh token se consideraría un robo");
+  assert.equal(refreshes, 1, "presentar dos veces el mismo refresh token se consideraría un robo");
+});
+
+test("cerrar sesión avisa al servidor (que borra la cookie) aunque falle", async () => {
+  api.setSession(PAIR);
+  replies.push(reply(204));
+
+  await api.logout();
+
+  assert.equal(calls[0].url, "http://pokedex.test/api/v1/auth/logout");
+  assert.equal(calls[0].body, undefined);
+  assert.equal(api.isLoggedIn(), false);
 });
 
 test("un 429 trae el mensaje y los segundos de espera", async () => {
@@ -140,12 +164,12 @@ test("sin red, un error claro", async () => {
   await assert.rejects(api.request("/api/v1/x", { auth: false }), { status: 0, message: /conexión/ });
 });
 
-test("los tokens que devuelve Google se recogen y desaparecen de la URL", () => {
+test("de Google se toma solo el access token y la URL queda limpia", () => {
   window.location.hash = "#access_token=acc-g&refresh_token=ref-g&expires_in=60&token_type=bearer";
 
   assert.equal(api.takeTokensFromUrl(), true);
   assert.equal(api.isLoggedIn(), true);
-  assert.equal(store.get("pokedex.refresh"), "ref-g");
+  assert.equal(store.size, 0, "el refresh del fragmento no se guarda: lo trae la cookie");
   assert.equal(window.location.hash, "#/");
 });
 

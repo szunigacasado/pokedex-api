@@ -8,14 +8,29 @@ import { initTechPanel } from "./techpanel.js";
 import { showError, toast } from "./ui.js";
 import { onCollectionChange } from "./data.js";
 import { watchMissions } from "./missions.js";
+import { isMuted, onMuteChange, setMuted, sfx } from "./sound.js";
 import { renderAuth } from "./views/auth.js";
 import { renderHome } from "./views/home.js";
 import { registerScreens } from "./screens.js";
 import { icon } from "./icons.js";
+import { initOakPanel } from "./oak-chat.js";
 
 const view = document.getElementById("view");
 const nav = document.getElementById("nav");
 const userMenu = document.getElementById("user-menu");
+
+// ── Sonido ───────────────────────────────────────────────────
+function initSound() {
+  const button = document.getElementById("sound-toggle");
+  const draw = (muted) => {
+    button.setAttribute("aria-pressed", String(muted));
+    button.replaceChildren(icon(muted ? "volume-x" : "volume"), el("span", { class: "visually-hidden" }, "Silenciar el sonido"));
+    button.title = muted ? "Activar el sonido" : "Silenciar el sonido";
+  };
+  button.addEventListener("click", () => setMuted(!isMuted()));
+  onMuteChange(draw);
+  draw(isMuted());
+}
 
 // ── Pantallas ────────────────────────────────────────────────
 route("/", { title: "Inicio", render: renderHome, nav: { label: "Inicio", icon: "home", order: 0 } });
@@ -59,9 +74,11 @@ function renderUserMenu() {
 }
 
 let renderToken = 0;
+let syncOak = () => {};
 
 async function render() {
   const token = ++renderToken;
+  syncOak();
   if (!isLoggedIn()) {
     nav.hidden = true;
     renderUserMenu();
@@ -106,7 +123,12 @@ events.addEventListener("session", (event) => {
 
 async function start() {
   initTechPanel();
-  watchMissions(onCollectionChange, (message) => toast([icon("medal"), message], { type: "ok", timeout: 6000 }));
+  watchMissions(onCollectionChange, (message) => {
+    sfx("mission");
+    toast([icon("medal"), message], { type: "ok", timeout: 6000 });
+  });
+  initSound();
+  syncOak = initOakPanel();
   const fromGoogle = takeTokensFromUrl();
   if (fromGoogle || (await restoreSession())) {
     try {

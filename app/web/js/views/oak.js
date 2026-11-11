@@ -1,26 +1,19 @@
-// Laboratorio del Profesor Oak.
+// Profesor Oak.
 //
-// - «Mejora tu equipo»: Pokémon concretos que arreglan sus puntos débiles (calculados con
-//   la tabla de tipos, sin IA) con botón para meterlos en el equipo, y el consejo que
-//   redacta la IA.
-// - «Pregúntale»: búsqueda en lenguaje natural que enseña cómo ha entendido la pregunta
-//   y deja añadir cada resultado a la Pokédex.
+// - La página #/oak: la nota de cada equipo (calculada por la API) y el chat con Oak a
+//   pantalla completa. El chat es el mismo que el del panel lateral (oak-chat.js).
+// - Piezas que usa la página del equipo: el consejo redactado por la IA y los Pokémon
+//   concretos que arreglan sus puntos débiles.
 
 import { request } from "../api.js";
+import { askOak, createChat, reviewCard } from "../oak-chat.js";
 import { el } from "../dom.js";
-import { STAT_LABELS, artworkUrl, displayName, typeLabel } from "../format.js";
+import { artworkUrl, displayName } from "../format.js";
 import { addToCollection, entryFor, loadCollection } from "../data.js";
 import { icon } from "../icons.js";
 import { markDone } from "../missions.js";
+import { sfx } from "../sound.js";
 import { busy, empty, loader, showError, toast, typeBadge, typeBadges } from "../ui.js";
-
-const EXAMPLES = [
-  "los 3 Pokémon de fuego más rápidos",
-  "dragones que no sean legendarios",
-  "un tanque de agua que aguante golpes especiales",
-  "tipo planta sin veneno con más de 80 de defensa",
-  "los 5 legendarios más fuertes",
-];
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -131,6 +124,7 @@ function addToPokedexButton(pokemon, onDone) {
     busy(button, async () => {
       try {
         await addToCollection(pokemon.id);
+        sfx("capture");
         toast(`${displayName(pokemon.name)} está en tu Pokédex.`, { type: "ok" });
         onDone?.();
       } catch (error) {
@@ -162,6 +156,7 @@ export async function recommendationsSection(team, { onTeamChange } = {}) {
           if (!entryFor(pokemon.id)) await addToCollection(pokemon.id);
           const ids = [...team.members.map((m) => m.pokemon_id), pokemon.id];
           await request(`/api/v1/teams/${team.id}`, { method: "PUT", json: { pokemon_ids: ids } });
+          sfx("capture");
           toast(`${displayName(pokemon.name)} se une a «${team.name}».`, { type: "ok" });
           onTeamChange?.();
         } catch (error) {
@@ -203,174 +198,61 @@ export async function recommendationsSection(team, { onTeamChange } = {}) {
   );
 }
 
-async function teamHelp(team, area, rerender) {
-  const recs = el("div", {}, loader("Buscando Pokémon que encajen…"));
-  const advice = el("div", { "aria-live": "polite" });
-  area.replaceChildren(
-    el(
-      "div",
-      { class: "row row--between team-strip" },
-      el("div", { class: "row" }, team.members.map((m) => el("img", { src: artworkUrl(m.pokemon_id), alt: displayName(m.pokemon_name), width: 56, height: 56 }))),
-      el("a", { class: "btn btn--secondary btn--small", href: `#/equipos/${team.id}` }, icon("swords"), "Abrir en el constructor"),
-    ),
-    el("h2", {}, icon("bulb"), "Pokémon que te recomiendo"),
-    recs,
-    el("h2", {}, icon("message"), "Mi opinión"),
-    advice,
-  );
-  recommendationsSection(team, { onTeamChange: rerender })
-    .then((node) => recs.replaceChildren(node))
-    .catch((error) => {
-      recs.replaceChildren();
-      showError(error);
-    });
-  showTeamAdvice(team.id, advice);
-}
-
-async function teamTool(panel, initial = null) {
-  panel.replaceChildren(loader("Buscando tus equipos…"));
-  const teams = await request("/api/v1/teams");
-  if (!teams.length) {
-    panel.replaceChildren(
-      empty("swords", "Primero crea un equipo", "Cuando tengas uno, te diré qué Pokémon le faltan.", el("a", { class: "btn btn--primary", href: "#/equipos/nuevo" }, icon("plus"), "Crear un equipo")),
-    );
-    return;
-  }
-  const area = el("div", { class: "stack" });
-  let selected = teams.some((t) => t.id === initial) ? initial : teams[0].id;
-
-  async function show() {
-    try {
-      const team = await request(`/api/v1/teams/${selected}`);
-      // Al cambiar el equipo se vuelve a pintar todo, también las miniaturas de arriba.
-      await teamHelp(team, area, () => teamTool(panel, selected));
-    } catch (error) {
-      showError(error);
-    }
-  }
-
-  const buttons = teams.map((team) => {
-    const button = el(
-      "button",
-      { type: "button", class: "team-pick", "aria-pressed": String(team.id === selected) },
-      el("span", { class: "team-pick__name" }, team.name),
-      el("span", { class: "team-pick__members", "aria-hidden": "true" }, team.members.map((m) => el("img", { src: artworkUrl(m.pokemon_id), alt: "", width: 32, height: 32 }))),
-    );
-    button.addEventListener("click", () => {
-      selected = team.id;
-      for (const b of buttons) b.setAttribute("aria-pressed", String(b === button));
-      show();
-    });
-    return button;
-  });
-
-  panel.replaceChildren(el("div", { class: "team-picks", role: "group", "aria-label": "Elige un equipo" }, buttons), area);
-  show();
-}
-
-// ═════════════════════════════════════════════════════════════
-//  Pregúntale
-// ═════════════════════════════════════════════════════════════
-/** «Así lo he entendido»: los filtros de la pregunta como etiquetas legibles. */
-export function understoodChips(query) {
-  const chips = [];
-  for (const t of query.types ?? []) chips.push(typeBadge(t));
-  for (const t of query.exclude_types ?? []) chips.push(el("span", { class: "chip" }, icon("ban"), `sin ${typeLabel(t)}`));
-  for (const [stat, value] of Object.entries(query.min_stats ?? {})) chips.push(el("span", { class: "chip" }, `${STAT_LABELS[stat] ?? stat} ≥ ${value}`));
-  for (const [stat, value] of Object.entries(query.max_stats ?? {})) chips.push(el("span", { class: "chip" }, `${STAT_LABELS[stat] ?? stat} ≤ ${value}`));
-  if (query.legendary === true) chips.push(el("span", { class: "chip" }, "solo legendarios"));
-  if (query.legendary === false) chips.push(el("span", { class: "chip" }, "sin legendarios"));
-  if (query.mythical === true) chips.push(el("span", { class: "chip" }, "solo míticos"));
-  if (query.mythical === false) chips.push(el("span", { class: "chip" }, "sin míticos"));
-  if (query.sort_by) {
-    const label = query.sort_by === "total" ? "estadística total" : (STAT_LABELS[query.sort_by] ?? query.sort_by).toLowerCase();
-    chips.push(el("span", { class: "chip" }, `por ${label}, ${query.order === "asc" ? "de menor a mayor" : "de mayor a menor"}`));
-  }
-  chips.push(el("span", { class: "chip chip--muted" }, `hasta ${query.limit}`));
-  return chips;
-}
-
-function askTool(panel) {
-  const input = el("input", { class: "input input--search", id: "oak-question", maxlength: 200, minlength: 3, autocomplete: "off", placeholder: "Escribe lo que buscas…" });
-  const ask = el("button", { type: "submit", class: "btn btn--primary" }, icon("message"), "Preguntar");
-  const answer = el("div", { class: "stack", "aria-live": "polite" });
-
-  async function run(question) {
-    input.value = question;
-    await busy(ask, async () => {
-      answer.replaceChildren(loader("Consultando mis notas…"));
-      try {
-        const [result] = await Promise.all([request("/api/v1/pokemon/ask", { query: { q: question } }), loadCollection()]);
-        markDone("ask");
-        const grid = el("div", {});
-        const draw = () =>
-          grid.replaceChildren(
-            el(
-              "div",
-              { class: "tiles-pokemon" },
-              result.results.map((p) => pokemonTile(p, { extra: el("p", { class: "muted" }, `Total ${p.total}`), actions: [addToPokedexButton(p, draw)].filter(Boolean) })),
-            ),
-          );
-        draw();
-        answer.replaceChildren(
-          oakBubble(
-            result.count
-              ? `He encontrado ${result.count === 1 ? "un Pokémon" : `${result.count} Pokémon`} que encajan.`
-              : "No conozco ningún Pokémon de Kanto así. Prueba a pedir algo menos concreto.",
-            el("div", { class: "understood" }, el("span", { class: "muted" }, "Así lo he entendido:"), understoodChips(result.interpreted)),
-            sourceNote(result.source, result.model),
-          ),
-          result.results.length ? grid : null,
-        );
-      } catch (error) {
-        answer.replaceChildren();
-        showError(error);
-      }
-    }, "Pensando…");
-  }
-
-  const form = el(
-    "form",
-    { class: "panel stack", role: "search", "aria-label": "Pregúntale al Profesor Oak" },
-    el("label", { for: "oak-question" }, el("strong", {}, "¿Qué Pokémon buscas? Escríbelo como se lo dirías a una persona.")),
-    el("div", { class: "input-row" }, input, ask),
-    el("div", { class: "row" }, el("span", { class: "muted" }, "Prueba con:"), EXAMPLES.map((example) => el("button", { type: "button", class: "btn btn--secondary btn--small", onClick: () => run(example) }, example))),
-  );
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (input.value.trim().length < 3) {
-      input.focus();
-      return;
-    }
-    run(input.value.trim());
-  });
-  panel.replaceChildren(form, answer);
-  input.focus();
-}
-
 // ═════════════════════════════════════════════════════════════
 //  Página
 // ═════════════════════════════════════════════════════════════
-export async function renderOak(view) {
-  const panel = el("div", { class: "stack" });
-  const tools = [
-    ["Mejora tu equipo", "swords", () => teamTool(panel)],
-    ["Pregúntale", "message", () => askTool(panel)],
-  ];
-  const tabs = tools.map(([label, iconName, open]) => {
-    const button = el("button", { type: "button", "aria-pressed": "false" }, icon(iconName), label);
-    button.addEventListener("click", () => {
-      for (const b of tabs) b.setAttribute("aria-pressed", String(b === button));
-      open();
+function teamGrades(teams) {
+  const detail = el("div", { "aria-live": "polite" });
+  const buttons = teams.map((team) => {
+    const score = el("span", { class: "team-grade__score" }, "…");
+    const button = el(
+      "button",
+      { type: "button", class: "team-grade", "aria-pressed": "false" },
+      el("span", { class: "team-grade__name" }, team.name),
+      el("span", { class: "team-pick__members", "aria-hidden": "true" }, team.members.map((m) => el("img", { src: artworkUrl(m.pokemon_id), alt: "", width: 28, height: 28 }))),
+      score,
+    );
+    const review = request(`/api/v1/teams/${team.id}/review`);
+    review.then((r) => (score.textContent = String(r.score).replace(".", ","))).catch(() => (score.textContent = "–"));
+    button.addEventListener("click", async () => {
+      for (const b of buttons) b.setAttribute("aria-pressed", String(b === button));
+      try {
+        detail.replaceChildren(
+          reviewCard(await review, team.name),
+          el(
+            "div",
+            { class: "row" },
+            el("button", { type: "button", class: "btn btn--primary btn--small", onClick: () => askOak(`¿Qué Pokémon le falta a mi equipo «${team.name}»?`, { team_id: team.id, pokemon_id: null }) }, icon("bulb"), "¿Qué le falta?"),
+            el("a", { class: "btn btn--secondary btn--small", href: `#/equipos/${team.id}` }, icon("swords"), "Abrir"),
+          ),
+        );
+      } catch (error) {
+        showError(error);
+      }
     });
     return button;
   });
+  if (buttons.length) queueMicrotask(() => buttons[0].click());
+  return el("div", { class: "stack" }, el("div", { class: "team-grades", role: "group", "aria-label": "Tus equipos" }, buttons), detail);
+}
 
+export async function renderOak(view) {
+  view.replaceChildren(loader("Abriendo el laboratorio…"));
+  const teams = (await request("/api/v1/teams")).filter((t) => t.members.length);
   view.replaceChildren(
-    el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "Laboratorio del Profesor Oak"), el("p", {}, "Te digo qué Pokémon le faltan a tu equipo y busco por ti con tus palabras."))),
-    oakBubble("¡Bienvenido a mi laboratorio! Elige un equipo y te diré qué Pokémon concretos lo harían mejor, o pregúntame lo que quieras sobre los 151 de Kanto. Los datos los calcula siempre la API: yo solo te los explico."),
-    el("div", { class: "segmented", role: "group", "aria-label": "Herramientas del laboratorio" }, tabs),
-    panel,
+    el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "Profesor Oak"), el("p", {}, "Pídele que revise tu equipo, que te recomiende Pokémon o que busque por ti. Consulta la API con tu sesión y tú decides si haces lo que te propone."))),
+    el(
+      "div",
+      { class: "oak-page" },
+      el("section", { class: "panel stack oak-page__chat", "aria-labelledby": "oak-chat-title" }, el("h2", { id: "oak-chat-title", class: "visually-hidden" }, "Chat con el Profesor Oak"), createChat()),
+      el(
+        "aside",
+        { class: "panel stack oak-page__side", "aria-labelledby": "oak-grades-title" },
+        el("h2", { id: "oak-grades-title" }, icon("medal"), "Nota de tus equipos"),
+        teams.length
+          ? teamGrades(teams)
+          : empty("swords", "Aún no tienes equipos", "Crea uno y Oak le pondrá nota.", el("a", { class: "btn btn--primary", href: "#/equipos/nuevo" }, icon("plus"), "Crear un equipo")),
+      ),
+    ),
   );
-  tabs[0].click();
 }

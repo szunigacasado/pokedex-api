@@ -43,6 +43,21 @@ def _unauthorized() -> HTTPException:
     )
 
 
+def user_from_token(session: Session, token: object) -> User | None:
+    """El usuario activo dueño de un access token, o None. Para conexiones que no usan la
+    cabecera Authorization, como el WebSocket de los combates online."""
+    if not isinstance(token, str) or not token:
+        return None
+    try:
+        claims = decode_token(token, expected_type="access")
+    except InvalidTokenError:
+        return None
+    user = session.get(User, claims["user_id"])
+    if user is None or not user.is_active or user.username != claims["sub"]:
+        return None
+    return user
+
+
 def get_current_user(
     request: Request,
     session: SessionDep,

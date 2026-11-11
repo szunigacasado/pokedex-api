@@ -268,6 +268,65 @@ def run(smoke: Smoke) -> None:
             has("summary", "suggestions", "source"),
             label="/api/v1/teams/{id}/advice",
         )
+        s.check(
+            "GET",
+            f"/api/v1/teams/{team_id}/review",
+            200,
+            has("score", "grade", "parts"),
+            label="/api/v1/teams/{id}/review",
+        )
+        s.check(
+            "POST",
+            "/api/v1/oak/chat",
+            200,
+            has("reply", "cards", "actions", "source"),
+            json={
+                "messages": [{"role": "user", "content": "Revisa mi equipo y ponle nota"}],
+                "context": {"team_id": team_id},
+            },
+        )
+
+        # ── Combates ─────────────────────────────────────────
+        s.check("POST", "/api/v1/pvp/rooms", 201, has("code"), json={"team_id": team_id})
+        battle = s.check(
+            "POST",
+            "/api/v1/battles",
+            201,
+            has("id", "you", "rival", "actions"),
+            json={"team_id": team_id, "difficulty": "easy"},
+        )
+        if battle is not None and battle.status_code == 201:
+            battle_id = battle.json()["id"]
+            s.check(
+                "GET",
+                f"/api/v1/battles/{battle_id}",
+                200,
+                has("status"),
+                label="/api/v1/battles/{id}",
+            )
+            s.check(
+                "POST",
+                f"/api/v1/battles/{battle_id}/turn",
+                200,
+                has("events"),
+                json={"type": "move", "index": 0},
+                label="/api/v1/battles/{id}/turn",
+            )
+            s.check(
+                "POST",
+                f"/api/v1/battles/{battle_id}/forfeit",
+                (200, 409),  # 409 si el combate ya terminó en el primer turno
+                label="/api/v1/battles/{id}/forfeit",
+            )
+        s.check("GET", "/api/v1/battles", 200)
+        s.check("GET", "/api/v1/progress", 200)
+        if entries:
+            s.check(
+                "POST",
+                f"/api/v1/pokedex/{entries[0]}/evolve",
+                409,  # Pikachu no evoluciona por nivel (necesita una piedra)
+                label="/api/v1/pokedex/{id}/evolve (no evoluciona por nivel)",
+            )
         s.check("DELETE", f"/api/v1/teams/{team_id}", 204, label="/api/v1/teams/{id}")
 
     # ── v2 ───────────────────────────────────────────────────

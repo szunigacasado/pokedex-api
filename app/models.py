@@ -15,7 +15,7 @@ CASCADE``), para que se cumplan aunque algún día se escriba en ella por otra v
 
 import re
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import StringConstraints, field_validator, model_validator
 from sqlalchemy import JSON, CheckConstraint, Column, DateTime, Dialect, UniqueConstraint
@@ -537,6 +537,88 @@ class TeamRecommendations(SQLModel):
     recommendations: list[Recommendation]
 
 
+# ── Revisión del equipo y asistente ──────────────────────────
+class ReviewPart(SQLModel):
+    key: Literal["defense", "offense", "stats", "size"]
+    label: str
+    score: float = Field(ge=0)
+    max: float = Field(gt=0)
+    detail: str
+
+
+class TeamReview(SQLModel):
+    """Nota del equipo calculada por el código (nunca por la IA), con su desglose."""
+
+    team_id: int
+    score: float = Field(ge=0, le=10, description="Nota de 0 a 10.")
+    grade: str = Field(description="Sobresaliente, Notable, Aprobado o Necesita mejorar.")
+    parts: list[ReviewPart]
+    strengths: list[str]
+    weaknesses: list[str]
+
+
+OAK_MESSAGE_MAX_LENGTH: Final = 500
+OAK_REPLY_MAX_LENGTH: Final = 1200
+
+
+class OakMessage(SQLModel):
+    role: Literal["user", "assistant"]
+    content: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=OAK_MESSAGE_MAX_LENGTH),
+    ]
+
+
+class OakContext(SQLModel):
+    """Lo que el entrenador está viendo, para que «este equipo» tenga sentido."""
+
+    team_id: int | None = Field(default=None, ge=1)
+    pokemon_id: int | None = Field(default=None, ge=1, le=1025)
+
+
+class OakChatRequest(SQLModel):
+    messages: list[OakMessage] = Field(min_length=1, max_length=12)
+    context: OakContext = Field(default_factory=OakContext)
+
+    @model_validator(mode="after")
+    def _ends_with_the_user(self) -> "OakChatRequest":
+        if self.messages[-1].role != "user":
+            raise ValueError("El último mensaje tiene que ser del entrenador.")
+        return self
+
+
+class OakPokemon(PokemonSummary):
+    in_pokedex: bool = False
+    reason: str | None = None
+
+
+class OakCard(SQLModel):
+    kind: Literal["review", "pokemon"]
+    title: str
+    review: TeamReview | None = None
+    pokemon: list[OakPokemon] = []
+
+
+class OakAction(SQLModel):
+    """Acción que Oak **propone**. Nunca la ejecuta: la web la muestra como botón y solo
+    se hace si el entrenador lo pulsa, con la API normal y sus comprobaciones."""
+
+    kind: Literal["add_to_team", "replace_in_team", "capture", "open_team", "open_pokemon"]
+    label: str
+    pokemon_id: int | None = None
+    team_id: int | None = None
+    replace_id: int | None = Field(default=None, description="Miembro que sale del equipo.")
+
+
+class OakChatReply(SQLModel):
+    reply: str
+    cards: list[OakCard] = []
+    actions: list[OakAction] = []
+    tools: list[str] = Field(default=[], description="Herramientas que ha usado Oak.")
+    source: AiSource
+    model: str | None = None
+
+
 class KantoPokemon(PokemonSummary):
     """Un Pokémon del catálogo de Kanto: lo justo para pintar una cuadrícula y filtrar."""
 
@@ -764,3 +846,85 @@ class TeamAnalysis(SQLModel):
     )
     not_covered: list[str]
     highlights: list[str] = Field(description="Conclusiones en español calculadas con reglas.")
+
+
+# ═════════════════════════════════════════════════════════════
+#  Combates, experiencia y niveles
+# ═════════════════════════════════════════════════════════════
+class PokemonProgress(SQLModel, table=True):
+    """Nivel y experiencia de un Pokémon de la Pokédex. Tabla aparte de PokedexEntry para
+    no tener que migrar la existente: se crea sola y, si falta la fila, es nivel 10."""
+
+    entry_id: int = Field(primary_key=True, foreign_key="pokedexentry.id", ondelete="CASCADE")
+    level: int = Field(default=10, ge=1, le=100)
+    xp: int = Field(default=0, ge=0)
+    battles: int = Field(default=0, ge=0)
+    wins: int = Field(default=0, ge=0)
+
+
+class Battle(SQLModel, table=True):
+    """Un combate. No se guarda su estado, sino la semilla, la foto inicial de los equipos
+    y las acciones: el estado se reconstruye repitiéndolas (el motor es determinista)."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    trainer_id: int = Field(foreign_key="user.id", index=True, ondelete="CASCADE")
+    team_id: int | None = Field(default=None, foreign_key="team.id", ondelete="SET NULL")
+    mode: str = Field(default="cpu", max_length=10)
+    seed: int
+    setup: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    actions: list[Any] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    status: str = Field(default="active", max_length=10, index=True)
+    opponent_name: str = Field(max_length=100)
+    rewards: list[Any] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
+    created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
+    finished_at: datetime | None = Field(default=None, sa_type=UTCDateTime)
+
+
+class BattleCreate(SQLModel):
+    team_id: int = Field(ge=1)
+    difficulty: Literal["easy", "normal", "hard"] = "normal"
+    theme: TypeName | None = Field(default=None, description="Tipo del rival; vacío = variado.")
+
+
+class BattleAction(SQLModel):
+    type: Literal["move", "switch"]
+    index: int | None = Field(default=None, ge=0, le=3, description="Ataque (si type=move).")
+    to: int | None = Field(default=None, ge=0, le=5, description="Pokémon al que cambiar.")
+
+
+class BattleReward(SQLModel):
+    entry_id: int
+    pokemon_id: int
+    name: str
+    xp_gained: int
+    level_before: int
+    level_after: int
+    evolves_to: str | None = Field(default=None, description="Puede evolucionar ya.")
+
+
+class BattleView(SQLModel):
+    id: int
+    status: Literal["active", "won", "lost", "draw", "forfeit"]
+    turn: int
+    you: dict[str, Any]
+    rival: dict[str, Any]
+    actions: dict[str, Any] | None = Field(description="Lo que puedes hacer; null si terminó.")
+    events: list[dict[str, Any]] = Field(description="Lo que ha pasado en el último turno.")
+    rewards: list[BattleReward] | None = None
+
+
+class BattleSummary(SQLModel):
+    id: int
+    status: str
+    opponent_name: str
+    mode: str
+    created_at: datetime
+
+
+class ProgressRead(SQLModel):
+    entry_id: int
+    level: int
+    xp: int
+    xp_to_next: int
+    battles: int
+    wins: int
