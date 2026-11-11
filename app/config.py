@@ -147,6 +147,11 @@ class Settings(BaseSettings):
     hsts_max_age_seconds: int = Field(default=63_072_000, ge=0)  # 2 años
     docs_enabled: bool = Field(default=True, description="Publicar /docs, /redoc y /openapi.json")
     web_enabled: bool = Field(default=True, description="Publicar la web de la Pokédex en /")
+    trust_cloudflare_tunnel: bool = Field(
+        default=False,
+        description="Tomar la IP real de CF-Connecting-IP en las conexiones locales "
+        "(publicación con un túnel de Cloudflare; lo activa python -m app.tunnel).",
+    )
 
     # ── Servidor HTTPS (``python -m app``) ───────────────────
     server_host: str = Field(

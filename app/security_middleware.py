@@ -25,6 +25,7 @@ cargarlos en memoria**: mira ``Content-Length`` y, si no viene (``Transfer-Encod
 chunked``), cuenta los bytes según llegan y corta al pasarse.
 """
 
+import ipaddress
 import json
 from typing import Final
 
@@ -177,3 +178,40 @@ class BodySizeLimitMiddleware:
             }
         )
         await send({"type": "http.response.body", "body": body})
+
+
+_LOOPBACK: Final = frozenset({"127.0.0.1", "::1"})
+
+
+class CloudflareTunnelMiddleware:
+    """IP real del visitante cuando la web se publica con un túnel de Cloudflare.
+
+    Por el túnel, todas las peticiones llegan desde ``cloudflared``, en esta misma
+    máquina (127.0.0.1). Sin esto, todos los visitantes compartirían IP y, con ella, los
+    límites de intentos y el bloqueo por IP. Cloudflare envía la IP real en
+    ``CF-Connecting-IP``, pero esa cabecera **solo se cree si la conexión viene de la
+    propia máquina**: desde fuera, cualquiera podría escribirla para saltarse los límites.
+    Solo se activa con ``TRUST_CLOUDFLARE_TUNNEL=true`` (lo hace ``python -m app.tunnel``).
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            client = scope.get("client")
+            if client and client[0] in _LOOPBACK:
+                for name, value in scope.get("headers", []):
+                    if name == b"cf-connecting-ip":
+                        ip = _valid_ip(value.decode("latin-1").strip())
+                        if ip is not None:
+                            scope = {**scope, "client": (ip, client[1])}
+                        break
+        await self.app(scope, receive, send)
+
+
+def _valid_ip(value: str) -> str | None:
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        return None
