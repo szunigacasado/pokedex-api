@@ -29,7 +29,7 @@ from app.errors import register_exception_handlers
 from app.logging_config import configure_logging
 from app.middleware import RequestLoggingMiddleware
 from app.rate_limit import limiter, rate_limit_exceeded_handler
-from app.routers import auth, oak, oauth, pokedex, pokemon, teams, v2
+from app.routers import auth, battles, oak, oauth, pokedex, pokemon, teams, v2
 from app.security_middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.services.ai_oak import OakAI
 from app.services.google_oauth import GoogleOAuthClient
@@ -61,6 +61,7 @@ OPENAPI_TAGS = [
     {"name": "Pokémon", "description": "Catálogo de Pokémon (datos de PokeAPI)."},
     {"name": "Pokédex", "description": "Tu colección personal: añadir, capturar, exportar."},
     {"name": "Equipos", "description": "Equipos de hasta seis Pokémon y su análisis."},
+    {"name": "Combates", "description": "Combates por turnos, experiencia, niveles y evoluciones."},
     {"name": "Profesor Oak (IA)", "description": "Consejos y búsqueda en lenguaje natural."},
     {"name": "v2", "description": "Versión 2: evoluciones y paginación por cursor."},
 ]
@@ -190,6 +191,7 @@ def create_app() -> FastAPI:
     api_v1.include_router(pokemon.router)
     api_v1.include_router(pokedex.router)
     api_v1.include_router(teams.router)
+    api_v1.include_router(battles.router)
     app.include_router(api_v1)
 
     # v2: solo los recursos que han cambiado de forma incompatible. El resto sigue en v1.
