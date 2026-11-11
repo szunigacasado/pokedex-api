@@ -246,3 +246,20 @@ async def test_evolutions_that_are_not_by_level_are_ignored() -> None:
     ]
     assert await level_evolution(FakePokeAPI(vulpix), 37) is None
     assert await level_evolution(FakePokeAPI(CHARMANDER_CHAIN, fail=True), 4) is None
+
+
+def test_a_replacement_does_not_attack_in_the_turn_it_comes_in() -> None:
+    """Regresión: si el más rápido debilita al rival, el Pokémon que entra en su lugar no
+    usa el ataque que había elegido el anterior (fallaba con IndexError si tenía menos
+    ataques, y si no, atacaba sin que le tocara)."""
+    you = [custom(["fighting"], speed=200, level=100)]
+    rival = [custom(["fire", "flying"], speed=10, level=2), custom(["normal"], speed=10, level=2)]
+    battle = duel(you, rival, cpu=None)
+    events = battle.play_turn(
+        {0: {"type": "move", "index": 0}, 1: {"type": "move", "index": 2}}  # 3.er ataque
+    )
+    moves = [e for e in events if e["type"] == "move"]
+    assert [m["side"] for m in moves] == [0]  # solo ataca el que no ha cambiado
+    assert any(e["type"] == "faint" and e["side"] == 1 for e in events)
+    assert any(e["type"] == "send" and e["side"] == 1 for e in events)
+    assert battle.sides[1].current.hp == battle.sides[1].current.stats["hp"]  # el nuevo, intacto
