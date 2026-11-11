@@ -16,7 +16,7 @@ Además de lo que pide el enunciado:
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
 - **API v2** con evoluciones y paginación por cursor, y retirada ordenada de la v1.
 - **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
-- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 638 tests de Python (97 % de cobertura, también contra PostgreSQL) y 37 de JavaScript.
+- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 639 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
 
 ## Equipo
 
@@ -592,8 +592,10 @@ La API sirve en `/` una web propia ([`app/web/`](app/web/)) para usarla sin cono
   - La sesión se renueva sola.
   - Los errores llegan en lenguaje normal; un `429` muestra una cuenta atrás.
 - **Primeros pasos guiados.**
-  - Al crear la cuenta se abre un **tour** que resalta cada sección sobre la propia interfaz (se maneja con el teclado: flechas y Escape). Se puede repetir con «¿Cómo funciona?».
-  - El inicio muestra 10 **misiones de entrenador** (añadir, capturar, poner apodo, crear un equipo, pedir consejo a Oak, ver un variocolor, adivinar una silueta…), con su progreso. Cada una enlaza a donde se cumple y avisa al completarla.
+  - **Inicio guiado, la «Ruta del entrenador»:** quien empieza ve un solo paso cada vez, con la acción en la propia tarjeta: elegir su primer Pokémon (Bulbasaur, Charmander o Squirtle), capturar dos más, crear su equipo con un clic, ver la nota que le pone Oak y ganar su primer combate. Los pasos hechos quedan marcados y los siguientes, bloqueados. Al terminar, el inicio pasa a un panel con tres accesos.
+  - **Menú corto:** Inicio, Mi Pokédex, Equipos y Combate a la vista; el buscador, el juego, las estadísticas y la página de Oak, en «Más».
+  - Las 11 **misiones** siguen como **Logros**, plegados al final del inicio; cada una enlaza a donde se cumple y avisa al completarla.
+  - **Tour** que resalta cada parte de la interfaz (con teclado: flechas y Escape), en «Más → ¿Cómo funciona?».
 - **La Pokédex que habla.**
   - Cada ficha lee en voz alta su entrada en español con la síntesis de voz del navegador, sin servicios externos ni coste. Mientras habla, la lente azul de la Pokédex se ilumina.
   - Otro botón reproduce el **grito** del Pokémon, del repositorio de gritos de PokeAPI.
