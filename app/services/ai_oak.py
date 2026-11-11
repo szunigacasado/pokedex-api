@@ -129,7 +129,19 @@ Tipos válidos (en inglés): normal, fire, water, electric, grass, ice, fighting
 ground, flying, psychic, bug, rock, ghost, dragon, dark, steel, fairy.
 Estadísticas válidas: hp, attack, defense, special_attack, special_defense, speed.
 Orientación: «rápido» suele ser speed >= 90; «fuerte» ordenar por attack;
-«resistente» ordenar por defense; «los mejores» ordenar por total."""
+«resistente» ordenar por defense; «los mejores» ordenar por total; «aguanta golpes
+especiales» es special_defense; «que no sean X» o «sin X» es exclude_types o false.
+Si la frase menciona un tipo o una característica, NUNCA devuelvas los filtros vacíos.
+
+Ejemplos (pregunta → JSON):
+«los 3 de fuego más rápidos» →
+{"types": ["fire"], "min_stats": {"speed": 90}, "sort_by": "speed", "limit": 3}
+«dragones que no sean legendarios» →
+{"types": ["dragon"], "legendary": false}
+«un tanque de agua que aguante golpes especiales» →
+{"types": ["water"], "min_stats": {"special_defense": 90}, "sort_by": "special_defense"}
+«planta sin veneno con más de 80 de defensa» →
+{"types": ["grass"], "exclude_types": ["poison"], "min_stats": {"defense": 80}}"""
 
 
 def _recommendations(analysis: TeamAnalysis, dangers: list[Any]) -> list[dict[str, Any]]:
@@ -271,6 +283,16 @@ _NUMBER_STAT: Final = re.compile(
 _LIMIT: Final = re.compile(r"\b(?:los|las|top)\s+(\d{1,2})\b")
 
 
+def _flag(words: list[str], targets: tuple[str, ...]) -> bool | None:
+    """True si se piden («legendarios»), False si se excluyen («que no sean
+    legendarios», «sin legendarios»), None si no se mencionan."""
+    for i, word in enumerate(words):
+        if word in targets:
+            before = words[max(0, i - 3) : i]
+            return not ("no" in before or "sin" in before)
+    return None
+
+
 def rules_query(question: str) -> PokemonQuery:
     """Intérprete sencillo de búsquedas en español, sin IA."""
     text = _plain(question)
@@ -300,8 +322,11 @@ def rules_query(question: str) -> PokemonQuery:
         min_stats.setdefault("speed", 90)
     elif any(w in words for w in ("fuerte", "fuertes", "potente", "potentes")):
         sort_by = "attack"
-    elif any(w in words for w in ("resistente", "resistentes", "tanque", "tanques")):
-        sort_by = "defense"
+    elif any(
+        w in words for w in ("resistente", "resistentes", "tanque", "tanques", "aguante", "aguanta")
+    ):
+        # «aguante golpes especiales» se refiere a la defensa especial
+        sort_by = "special_defense" if any(w.startswith("especial") for w in words) else "defense"
     elif any(w in words for w in ("mejor", "mejores")):
         sort_by = "total"
     elif min_stats:
@@ -313,11 +338,23 @@ def rules_query(question: str) -> PokemonQuery:
         exclude_types=excluded[:5],
         min_stats=min_stats,
         max_stats=max_stats,
-        legendary=True if "legendario" in text or "legendarios" in text else None,
-        mythical=True if "mitico" in text or "miticos" in text else None,
+        legendary=_flag(words, ("legendario", "legendarios")),
+        mythical=_flag(words, ("mitico", "miticos")),
         sort_by=sort_by,
         order="asc" if any(w in words for w in ("lento", "lentos", "debil", "debiles")) else "desc",
         limit=max(1, min(20, int(limit_match.group(1)))) if limit_match else 10,
+    )
+
+
+def _has_filters(query: PokemonQuery) -> bool:
+    return bool(
+        query.types
+        or query.exclude_types
+        or query.min_stats
+        or query.max_stats
+        or query.legendary is not None
+        or query.mythical is not None
+        or query.sort_by
     )
 
 
@@ -480,9 +517,17 @@ class OakAI:
         if answer is not None:
             content, model = answer
             try:
-                return PokemonQuery.model_validate(content), model
+                query = PokemonQuery.model_validate(content)
             except ValidationError:
                 logger.warning("IA %s: los filtros no cumplen el esquema; se usan reglas", model)
+            else:
+                # Si la IA no ha sacado ningún filtro pero las reglas sí, la IA se ha quedado
+                # corta: es mejor la búsqueda de las reglas que devolver los 151 sin criterio.
+                fallback = rules_query(clean)
+                if not _has_filters(query) and _has_filters(fallback):
+                    logger.info("IA %s: no ha encontrado filtros; se usan las reglas", model)
+                    return fallback, None
+                return query, model
         return rules_query(clean), None
 
 
