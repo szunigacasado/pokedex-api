@@ -2,18 +2,23 @@
 //
 // - El access token vive SOLO en memoria: un script ajeno no puede leerlo de ningún
 //   almacenamiento, y al recargar se pide uno nuevo.
-// - El refresh token se guarda en sessionStorage (dura lo que la pestaña) para que una
-//   recarga no cierre la sesión. Cada uso lo rota: la API devuelve uno nuevo y anula el
-//   anterior.
+// - El refresh token NO lo ve la web: vive en una cookie HttpOnly que solo se envía a
+//   /api/v1/auth (ver app/session_cookie.py). Por eso entrar desde /docs inicia también la
+//   sesión aquí, y una recarga no la cierra. Cada uso la rota.
 // - Ante un 401 se renueva la sesión una vez y se repite la petición, sin que el usuario
 //   lo note. Si no se puede, se avisa con el evento "session".
 // - Cada petición se anuncia con el evento "request" para el modo técnico.
 
 import { filenameFromDisposition, friendlyError } from "./format.js";
 
-const REFRESH_KEY = "pokedex.refresh";
-
 export const events = new EventTarget();
+
+// Las versiones anteriores guardaban el refresh token en sessionStorage: se borra el resto.
+try {
+  window.sessionStorage?.removeItem("pokedex.refresh");
+} catch {
+  /* sin almacenamiento: nada que borrar */
+}
 
 let accessToken = null;
 let expiresAt = 0;
@@ -30,18 +35,6 @@ export class ApiError extends Error {
   }
 }
 
-function sessionStore() {
-  try {
-    return window.sessionStorage;
-  } catch {
-    return null;
-  }
-}
-
-function storedRefreshToken() {
-  return sessionStore()?.getItem(REFRESH_KEY) ?? null;
-}
-
 export function isLoggedIn() {
   return accessToken !== null;
 }
@@ -54,7 +47,6 @@ export function accessTokenSecondsLeft() {
 export function setSession(pair) {
   accessToken = pair.access_token;
   expiresAt = Date.now() + Number(pair.expires_in ?? 0) * 1000;
-  sessionStore()?.setItem(REFRESH_KEY, pair.refresh_token);
   events.dispatchEvent(new CustomEvent("session", { detail: { loggedIn: true } }));
 }
 
@@ -62,13 +54,11 @@ export function clearSession() {
   const wasLoggedIn = accessToken !== null;
   accessToken = null;
   expiresAt = 0;
-  sessionStore()?.removeItem(REFRESH_KEY);
   if (wasLoggedIn) events.dispatchEvent(new CustomEvent("session", { detail: { loggedIn: false } }));
 }
 
-/** Recupera la sesión de esta pestaña tras una recarga. */
+/** Recupera la sesión con la cookie: tras una recarga, o si se entró desde /docs. */
 export async function restoreSession() {
-  if (!storedRefreshToken()) return false;
   try {
     await refreshSession();
     return true;
@@ -78,19 +68,20 @@ export async function restoreSession() {
   }
 }
 
+/**
+ * Una sola renovación a la vez: en esta pestaña (las peticiones con 401 esperan a la misma)
+ * y entre pestañas (Web Locks). Presentar dos veces el mismo refresh token se trataría
+ * como un robo y cerraría la sesión en todas partes.
+ */
+function withRefreshLock(task) {
+  return navigator.locks?.request ? navigator.locks.request("pokedex-refresh", task) : task();
+}
+
 function refreshSession() {
-  // Una sola renovación a la vez: si varias peticiones reciben 401 juntas, todas
-  // esperan a la misma. Repetir el refresh token se trataría como un robo.
-  refreshing ??= (async () => {
-    const token = storedRefreshToken();
-    if (!token) throw new ApiError(401, "Tu sesión ha terminado. Vuelve a entrar.");
-    const pair = await request("/api/v1/auth/refresh", {
-      method: "POST",
-      json: { refresh_token: token },
-      auth: false,
-    });
+  refreshing ??= withRefreshLock(async () => {
+    const pair = await request("/api/v1/auth/refresh", { method: "POST", auth: false });
     setSession(pair);
-  })().finally(() => {
+  }).finally(() => {
     refreshing = null;
   });
   return refreshing;
@@ -146,7 +137,7 @@ export async function request(path, options = {}) {
     renewed: retried,
   });
 
-  if (response.status === 401 && auth && !retried && storedRefreshToken()) {
+  if (response.status === 401 && auth && !retried) {
     try {
       await refreshSession();
     } catch {
@@ -201,28 +192,24 @@ export async function login(username, password) {
 }
 
 export async function logout() {
-  const token = storedRefreshToken();
   try {
-    if (token) await request("/api/v1/auth/logout", { method: "POST", json: { refresh_token: token }, auth: false });
+    await request("/api/v1/auth/logout", { method: "POST", auth: false });
   } finally {
     clearSession();
   }
 }
 
 /**
- * Tras volver de Google, la API redirige a «/#access_token=…&refresh_token=…». Se
- * recogen los tokens y se borran de la barra de direcciones y del historial.
+ * Tras volver de Google, la API redirige a «/#access_token=…». Se toma el access token y se
+ * borra todo de la barra de direcciones y del historial; el refresh token ya está en la
+ * cookie HttpOnly, así que el del fragmento se descarta.
  */
 export function takeTokensFromUrl() {
   const hash = window.location.hash;
   if (!hash.startsWith("#access_token=")) return false;
   const params = new URLSearchParams(hash.slice(1));
   window.history.replaceState(null, "", `${window.location.pathname}#/`);
-  if (!params.get("access_token") || !params.get("refresh_token")) return false;
-  setSession({
-    access_token: params.get("access_token"),
-    refresh_token: params.get("refresh_token"),
-    expires_in: params.get("expires_in"),
-  });
+  if (!params.get("access_token")) return false;
+  setSession({ access_token: params.get("access_token"), expires_in: params.get("expires_in") });
   return true;
 }
