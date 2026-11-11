@@ -73,6 +73,10 @@ pluggy==1.7.0
     # via
     #   pytest
     #   pytest-cov
+psycopg==3.3.8
+    # via pokedex-api
+psycopg-binary==3.3.8 ; implementation_name != 'pypy'
+    # via psycopg
 pyasn1==0.6.5
     # via
     #   python-jose
@@ -128,6 +132,7 @@ typing-extensions==4.16.0
     #   fastapi
     #   limits
     #   opentelemetry-api
+    #   psycopg
     #   pydantic
     #   pydantic-core
     #   pydantic-settings
@@ -142,7 +147,9 @@ typing-inspection==0.4.5
     #   pydantic
     #   pydantic-settings
 tzdata==2026.6
-    # via pokedex-api
+    # via
+    #   pokedex-api
+    #   psycopg
 uvicorn==0.54.0
     # via pokedex-api
 uvloop==0.23.0 ; platform_python_implementation != 'PyPy' and sys_platform != 'cygwin' and sys_platform != 'win32'
