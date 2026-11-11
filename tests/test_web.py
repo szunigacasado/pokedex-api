@@ -158,3 +158,19 @@ def test_internal_endpoints_are_hidden_from_swagger_but_still_work(client: TestC
     assert "/api/v1/auth/google/callback" not in paths  # solo la llama Google
     assert "/" not in paths
     assert client.get("/health").status_code == 200
+
+
+def test_every_icon_used_exists() -> None:
+    """Un nombre mal escrito no rompe nada visible (sale el icono de ayuda), así que se
+    comprueba aquí: todo icono usado en la web debe existir en icons.js."""
+    icons_source = (WEB_DIR / "js" / "icons.js").read_text(encoding="utf-8")
+    defined = set(re.findall(r'^\s+"?([a-z-]+)"?: (?:\[|gear\(\))', icons_source, re.MULTILINE))
+    used: set[str] = set()
+    for file in JS_FILES:
+        source = file.read_text(encoding="utf-8")
+        used |= set(re.findall(r'\bicon\(\s*"([a-z-]+)"', source))
+        used |= set(re.findall(r'\bicon: "([a-z-]+)"', source))  # menú y misiones
+        used |= set(re.findall(r'\b(?:empty|tile|chips)\(\s*"([a-z-]+)"', source))
+        used |= set(re.findall(r'adviceList\([^,]+,\s*"([a-z-]+)"', source))
+    assert used, "no se ha encontrado ningún icono"
+    assert used <= defined, sorted(used - defined)

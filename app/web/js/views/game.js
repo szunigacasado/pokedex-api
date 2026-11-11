@@ -8,6 +8,7 @@ import { addToCollection, entryFor, loadCollection, loadKanto, updateEntry } fro
 import { markDone } from "../missions.js";
 import { loader, showError, toast } from "../ui.js";
 import { playCry } from "../voice.js";
+import { icon } from "../icons.js";
 
 async function capture(pokemon) {
   const entry = entryFor(pokemon.id);
@@ -30,13 +31,13 @@ export async function renderGame(view) {
   const stage = el("div", { class: "game__stage" });
   const options = el("div", { class: "game__options", role: "group", "aria-label": "¿Quién es?" });
   const feedback = el("div", { class: "game__feedback", "aria-live": "assertive" });
-  const next = el("button", { type: "button", class: "btn btn--primary", hidden: true }, "Siguiente ▶");
+  const next = el("button", { type: "button", class: "btn btn--primary", hidden: true }, "Siguiente", icon("chevron-right"));
 
   function finish() {
     const record = score > best;
     if (record) prefs.set("gameBest", score);
-    stage.replaceChildren(el("div", { class: "game__result" }, el("p", { class: "game__score" }, `${score} / ${ROUNDS}`), el("p", {}, verdict(score)), record ? el("p", { class: "ok" }, "🏆 ¡Nuevo récord!") : el("p", { class: "muted" }, `Tu récord: ${Math.max(best, score)} / ${ROUNDS}`)));
-    options.replaceChildren(el("button", { type: "button", class: "btn btn--primary", onClick: () => renderGame(view) }, "🔄 Jugar otra vez"), el("a", { class: "btn btn--secondary", href: "#/pokedex" }, "📕 Ver mi Pokédex"));
+    stage.replaceChildren(el("div", { class: "game__result" }, el("p", { class: "game__score" }, `${score} / ${ROUNDS}`), el("p", {}, verdict(score)), record ? el("p", { class: "ok" }, icon("trophy"), "¡Nuevo récord!") : el("p", { class: "muted" }, `Tu récord: ${Math.max(best, score)} / ${ROUNDS}`)));
+    options.replaceChildren(el("button", { type: "button", class: "btn btn--primary", onClick: () => renderGame(view) }, icon("refresh"), "Jugar otra vez"), el("a", { class: "btn btn--secondary", href: "#/pokedex" }, icon("book"), "Ver mi Pokédex"));
     feedback.replaceChildren();
     next.hidden = true;
     status.textContent = "Partida terminada.";
@@ -82,7 +83,7 @@ export async function renderGame(view) {
         } else {
           feedback.replaceChildren(el("p", { class: "alert" }, `¡Oh, no! Era ${displayName(answer.name)}.`));
         }
-        next.textContent = round >= ROUNDS ? "Ver resultado ▶" : "Siguiente ▶";
+        next.replaceChildren(round >= ROUNDS ? "Ver resultado" : "Siguiente", icon("chevron-right"));
         next.hidden = false;
         next.focus();
       }),

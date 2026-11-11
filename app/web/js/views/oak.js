@@ -6,6 +6,7 @@ import { el } from "../dom.js";
 import { markDone } from "../missions.js";
 import { busy, loader, pokemonCard, showError } from "../ui.js";
 import { collectionBadge } from "./search.js";
+import { icon } from "../icons.js";
 
 const EXAMPLES = [
   "los 3 Pokémon de fuego más rápidos",
@@ -37,9 +38,10 @@ function sourceNote(source, model) {
   return el(
     "p",
     { class: "oak__source" },
+    icon(source === "ai" ? "sparkles" : "rules"),
     source === "ai"
-      ? `✨ Redactado por IA (${model}) a partir de datos calculados por la API.`
-      : "📐 Generado con reglas a partir de datos calculados por la API (IA no disponible).",
+      ? `Redactado por IA (${model}) a partir de datos calculados por la API.`
+      : "Generado con reglas a partir de datos calculados por la API (IA no disponible).",
   );
 }
 
@@ -49,16 +51,16 @@ export function oakBubble(text, ...body) {
   const node = el(
     "div",
     { class: "oak" },
-    el("div", { class: "oak__avatar", "aria-hidden": "true" }, "👨‍🔬"),
+    el("div", { class: "oak__avatar" }, icon("flask")),
     el("div", { class: "oak__bubble" }, el("p", { class: "oak__name" }, "Profesor Oak"), speech, ...body),
   );
   typewriter(speech, text);
   return node;
 }
 
-function adviceList(title, icon, items) {
+function adviceList(title, iconName, items) {
   if (!items?.length) return null;
-  return el("section", { class: "oak__list" }, el("h3", {}, `${icon} ${title}`), el("ul", {}, items.map((item) => el("li", {}, item))));
+  return el("section", { class: "oak__list" }, el("h3", {}, icon(iconName), title), el("ul", {}, items.map((item) => el("li", {}, item))));
 }
 
 /** Pide consejo sobre un equipo y lo pinta en `slot`. */
@@ -73,9 +75,9 @@ export async function showTeamAdvice(teamId, slot) {
         el(
           "div",
           { class: "oak__lists" },
-          adviceList("Puntos fuertes", "💪", advice.strengths),
-          adviceList("Puntos débiles", "⚠️", advice.weaknesses),
-          adviceList("Mis consejos", "💡", advice.suggestions),
+          adviceList("Puntos fuertes", "shield", advice.strengths),
+          adviceList("Puntos débiles", "warning", advice.weaknesses),
+          adviceList("Mis consejos", "bulb", advice.suggestions),
         ),
         sourceNote(advice.source, advice.model),
       ),

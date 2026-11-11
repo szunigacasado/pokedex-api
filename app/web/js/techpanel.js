@@ -3,6 +3,7 @@
 
 import { accessTokenSecondsLeft, events, isLoggedIn } from "./api.js";
 import { el, prefs } from "./dom.js";
+import { icon } from "./icons.js";
 
 const MAX_ENTRIES = 60;
 
@@ -15,7 +16,7 @@ function entryNode(entry) {
     el("span", {}, `${entry.ms} ms`),
     entry.requestId ? el("span", { title: "X-Request-ID: búscalo en el log del servidor" }, `id ${entry.requestId.slice(0, 8)}`) : null,
     entry.limit ? el("span", { title: "Cabeceras X-RateLimit-*" }, `cupo ${entry.remaining}/${entry.limit}`) : null,
-    entry.renewed ? el("span", {}, "↻ tras renovar la sesión") : null,
+    entry.renewed ? el("span", {}, icon("refresh"), "tras renovar la sesión") : null,
   ];
   return el(
     "li",
@@ -48,7 +49,7 @@ export function initTechPanel() {
     el(
       "div",
       { class: "tech-panel__head" },
-      el("h2", { id: "tech-title" }, "⚙ Modo técnico"),
+      el("h2", { id: "tech-title" }, icon("gear"), "Modo técnico"),
       el("p", {}, "Cada acción de la web es una petición a la API REST. Aquí ves el método, la ruta, el código de respuesta, lo que tarda, su X-Request-ID y el cupo de rate limiting que te queda."),
       session,
       el(
@@ -78,6 +79,7 @@ export function initTechPanel() {
     refreshSession();
   }
 
+  toggle.prepend(icon("gear"));
   toggle.addEventListener("click", () => setOpen(panel.hidden));
   setOpen(prefs.get("techPanel", false));
 }
