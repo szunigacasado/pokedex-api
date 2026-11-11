@@ -13,6 +13,7 @@ import { renderAuth } from "./views/auth.js";
 import { renderHome } from "./views/home.js";
 import { registerScreens } from "./screens.js";
 import { icon } from "./icons.js";
+import { initOakPanel } from "./oak-chat.js";
 
 const view = document.getElementById("view");
 const nav = document.getElementById("nav");
@@ -73,9 +74,11 @@ function renderUserMenu() {
 }
 
 let renderToken = 0;
+let syncOak = () => {};
 
 async function render() {
   const token = ++renderToken;
+  syncOak();
   if (!isLoggedIn()) {
     nav.hidden = true;
     renderUserMenu();
@@ -125,6 +128,7 @@ async function start() {
     toast([icon("medal"), message], { type: "ok", timeout: 6000 });
   });
   initSound();
+  syncOak = initOakPanel();
   const fromGoogle = takeTokensFromUrl();
   if (fromGoogle || (await restoreSession())) {
     try {
