@@ -30,7 +30,11 @@ from app.logging_config import configure_logging
 from app.middleware import RequestLoggingMiddleware
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.routers import auth, battles, oak, oauth, pokedex, pokemon, pvp, teams, v2
-from app.security_middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
+from app.security_middleware import (
+    BodySizeLimitMiddleware,
+    SecurityHeadersMiddleware,
+    TrustedProxyMiddleware,
+)
 from app.services.ai_oak import OakAI
 from app.services.google_oauth import GoogleOAuthClient
 from app.services.pokeapi_service import PokeAPIService
@@ -182,6 +186,9 @@ def create_app() -> FastAPI:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     app.add_middleware(SecurityHeadersMiddleware, hsts_max_age=settings.hsts_max_age_seconds)
     app.add_middleware(RequestLoggingMiddleware)
+    if settings.client_ip_header:
+        # El más externo: el registro, los límites y el bloqueo ven la IP real
+        app.add_middleware(TrustedProxyMiddleware, header=settings.client_ip_header)
 
     api_v1 = APIRouter(prefix="/api/v1")
     api_v1.include_router(auth.router)

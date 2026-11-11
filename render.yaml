@@ -28,9 +28,10 @@ services:
       # borra en cada despliegue, así que los datos no pueden ir en SQLite.
       - key: DATABASE_URL
         sync: false
-      # Solo se cree la IP del cliente que añade el proxy de Render (red interna)
-      - key: FORWARDED_ALLOW_IPS
-        value: 10.0.0.0/8
+      # IP real del visitante: la escribe Cloudflare, delante de la plataforma, y la
+      # sobrescribe siempre (X-Forwarded-For no sirve: el cliente puede falsearlo)
+      - key: CLIENT_IP_HEADER
+        value: cf-connecting-ip
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
