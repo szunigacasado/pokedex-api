@@ -16,6 +16,7 @@ export const MISSIONS = [
   { id: "ask", icon: "message", title: "Hazle una pregunta a Oak", hint: "Por ejemplo: «dragones que no sean legendarios».", href: "#/oak", check: ({ flags }) => Boolean(flags.ask) },
   { id: "shiny", icon: "sparkles", title: "Descubre un variocolor", hint: "Pulsa «Variocolor» en la ficha de un Pokémon.", href: "#/pokemon/25", check: ({ flags }) => Boolean(flags.shiny) },
   { id: "guess", icon: "gamepad", title: "Adivina una silueta", hint: "Juega a «Adivina la silueta».", href: "#/juego", check: ({ flags }) => Boolean(flags.guess) },
+  { id: "battle", icon: "bolt", title: "Gana tu primer combate", hint: "En «Combate», elige tu equipo y un rival.", href: "#/combate", check: ({ flags }) => Boolean(flags.battle) },
   { id: "ten", icon: "medal", title: "Captura 10 de Kanto", hint: "Ya casi eres un experto.", href: "#/buscar", check: ({ collection }) => collection.filter((e) => e.is_captured && e.pokemon_id <= 151).length >= 10 },
 ];
 

@@ -412,6 +412,27 @@ Las rachas dependen de **dónde empieza cada día**: una captura a las 23:30 UTC
 
 El nombre del archivo se genera en ASCII (`equipo-equipo-elite-20261109.pdf`), porque las cabeceras HTTP no admiten cualquier carácter y un nombre con emojis rompería la descarga.
 
+### Combates, experiencia y niveles (`/api/v1`)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/battles` 🔒 | Empieza un combate de tu equipo contra un rival de la máquina (`difficulty`: `easy`, `normal` o `hard`; `theme`: el tipo del rival). |
+| `POST` | `/battles/{id}/turn` 🔒 | Juega un turno: `{"type": "move", "index": 0}` o `{"type": "switch", "to": 2}`. Devuelve los sucesos (ataques, daño, eficacia, críticos, debilitados) y el estado. |
+| `GET` | `/battles/{id}` 🔒 | Estado de un combate. |
+| `POST` | `/battles/{id}/forfeit` 🔒 | Rendirse (sin experiencia). |
+| `GET` | `/battles` 🔒 | Tus últimos 20 combates. |
+| `GET` | `/progress` 🔒 | Nivel y experiencia de cada Pokémon de tu Pokédex. |
+| `POST` | `/pokedex/{id}/evolve` 🔒 | Evoluciona a un Pokémon que ha llegado al nivel de su evolución. Conserva el apodo y sigue en sus equipos. |
+
+- **Motor determinista** ([`battle.py`](app/services/battle.py)), en Python puro y con una semilla aleatoria.
+  - El servidor no guarda el estado del combate: guarda la semilla, la foto inicial de los equipos y las acciones, y lo **reconstruye** repitiéndolas.
+  - Así sobrevive a un reinicio, se puede reproducir exactamente y sirve también para jugar contra un amigo.
+- **Fórmulas clásicas del género**:
+  - Estadísticas según el nivel.
+  - Daño según Ataque frente a Defensa, la bonificación de su propio tipo (×1,5), la tabla de tipos (×4 a ×0), los críticos (×1,5) y una variación del 85 al 100 %.
+  - El más rápido ataca primero.
+- **Experiencia**: cada Pokémon que sale al campo gana experiencia por rival debilitado, con un ×1,5 si se gana. Los niveles se guardan en una tabla aparte, así que la base de datos existente no necesita migraciones.
+
 ### Profesor Oak: IA (`/api/v1`)
 
 | Método | Ruta | Descripción |

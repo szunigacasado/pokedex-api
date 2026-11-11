@@ -81,7 +81,7 @@ function cardImage(id, sprite) {
  * Tarjeta de un Pokémon. `href` la convierte en enlace; `onClick`, en botón.
  * `badge` muestra un icono en la esquina (estrella si es favorito, Poké Ball si está capturado).
  */
-export function pokemonCard({ id, name, sprite, types = [], href, onClick, badge, label }) {
+export function pokemonCard({ id, name, sprite, types = [], href, onClick, badge, label, level = null }) {
   const tag = href ? "a" : "button";
   const props = {
     class: `card ${typeClass(types[0])}`,
@@ -94,6 +94,7 @@ export function pokemonCard({ id, name, sprite, types = [], href, onClick, badge
     tag,
     props,
     el("span", { class: "card__number" }, dexNumber(id)),
+    level ? el("span", { class: "card__level" }, `Nv. ${level}`) : null,
     badge ? el("span", { class: "card__badge", "aria-hidden": "true" }, badge) : null,
     cardImage(id, sprite),
     el("span", { class: "card__name" }, displayName(name)),
