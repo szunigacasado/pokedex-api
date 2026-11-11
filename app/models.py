@@ -15,7 +15,7 @@ CASCADE``), para que se cumplan aunque algún día se escriba en ella por otra v
 
 import re
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import StringConstraints, field_validator, model_validator
 from sqlalchemy import JSON, CheckConstraint, Column, DateTime, Dialect, UniqueConstraint
@@ -535,6 +535,88 @@ class TeamRecommendations(SQLModel):
     team_id: int
     free_slots: int = Field(ge=0, le=MAX_TEAM_SIZE)
     recommendations: list[Recommendation]
+
+
+# ── Revisión del equipo y asistente ──────────────────────────
+class ReviewPart(SQLModel):
+    key: Literal["defense", "offense", "stats", "size"]
+    label: str
+    score: float = Field(ge=0)
+    max: float = Field(gt=0)
+    detail: str
+
+
+class TeamReview(SQLModel):
+    """Nota del equipo calculada por el código (nunca por la IA), con su desglose."""
+
+    team_id: int
+    score: float = Field(ge=0, le=10, description="Nota de 0 a 10.")
+    grade: str = Field(description="Sobresaliente, Notable, Aprobado o Necesita mejorar.")
+    parts: list[ReviewPart]
+    strengths: list[str]
+    weaknesses: list[str]
+
+
+OAK_MESSAGE_MAX_LENGTH: Final = 500
+OAK_REPLY_MAX_LENGTH: Final = 1200
+
+
+class OakMessage(SQLModel):
+    role: Literal["user", "assistant"]
+    content: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=OAK_MESSAGE_MAX_LENGTH),
+    ]
+
+
+class OakContext(SQLModel):
+    """Lo que el entrenador está viendo, para que «este equipo» tenga sentido."""
+
+    team_id: int | None = Field(default=None, ge=1)
+    pokemon_id: int | None = Field(default=None, ge=1, le=1025)
+
+
+class OakChatRequest(SQLModel):
+    messages: list[OakMessage] = Field(min_length=1, max_length=12)
+    context: OakContext = Field(default_factory=OakContext)
+
+    @model_validator(mode="after")
+    def _ends_with_the_user(self) -> "OakChatRequest":
+        if self.messages[-1].role != "user":
+            raise ValueError("El último mensaje tiene que ser del entrenador.")
+        return self
+
+
+class OakPokemon(PokemonSummary):
+    in_pokedex: bool = False
+    reason: str | None = None
+
+
+class OakCard(SQLModel):
+    kind: Literal["review", "pokemon"]
+    title: str
+    review: TeamReview | None = None
+    pokemon: list[OakPokemon] = []
+
+
+class OakAction(SQLModel):
+    """Acción que Oak **propone**. Nunca la ejecuta: la web la muestra como botón y solo
+    se hace si el entrenador lo pulsa, con la API normal y sus comprobaciones."""
+
+    kind: Literal["add_to_team", "replace_in_team", "capture", "open_team", "open_pokemon"]
+    label: str
+    pokemon_id: int | None = None
+    team_id: int | None = None
+    replace_id: int | None = Field(default=None, description="Miembro que sale del equipo.")
+
+
+class OakChatReply(SQLModel):
+    reply: str
+    cards: list[OakCard] = []
+    actions: list[OakAction] = []
+    tools: list[str] = Field(default=[], description="Herramientas que ha usado Oak.")
+    source: AiSource
+    model: str | None = None
 
 
 class KantoPokemon(PokemonSummary):

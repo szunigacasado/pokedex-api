@@ -31,7 +31,7 @@ import logging
 import re
 import time
 import unicodedata
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, Final
 
 import httpx
@@ -59,6 +59,7 @@ from app.services.team_analysis import (
 logger = logging.getLogger("pokedex_api.ai")
 
 MAX_QUESTION_LENGTH: Final = 200
+MAX_TOOL_ROUNDS: Final = 4
 _STAT_WORDS_ES: Final = {
     "hp": ("ps", "vida", "salud"),
     "attack": ("ataque",),
@@ -497,6 +498,86 @@ class OakAI:
             return result
         return None
 
+    async def chat_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        execute: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]],
+        *,
+        on_retry: Callable[[], None] | None = None,
+    ) -> tuple[str, str] | None:
+        """Conversación con herramientas: el modelo pide datos (``tool_calls``), el código
+        los obtiene con ``execute`` y se los devuelve, hasta que responde con texto.
+
+        Como mucho ``MAX_TOOL_ROUNDS`` rondas y 4 llamadas por ronda; en la última se le
+        obliga a contestar. Si un modelo falla a mitad, se empieza de cero con el
+        siguiente (``on_retry`` descarta lo que hubiera reunido). ``None`` si ninguno sirve.
+        """
+        if not self.enabled:
+            return None
+        api_key = self._settings.groq_api_key.get_secret_value()  # type: ignore[union-attr]
+        for model in self._settings.groq_models:
+            if on_retry is not None:
+                on_retry()
+            convo = list(messages)
+            started = time.perf_counter()
+            try:
+                for round_ in range(MAX_TOOL_ROUNDS + 1):
+                    payload: dict[str, Any] = {
+                        "model": model,
+                        "messages": convo,
+                        "tools": tools,
+                        "tool_choice": "none" if round_ == MAX_TOOL_ROUNDS else "auto",
+                        "temperature": 0.3,
+                        "max_completion_tokens": 900,
+                    }
+                    if model.startswith("openai/gpt-oss"):
+                        payload["reasoning_effort"] = "low"
+                    response = await self._client.post(
+                        f"{self._settings.groq_base_url}/chat/completions",
+                        json=payload,
+                        headers={"Authorization": f"Bearer {api_key}"},
+                    )
+                    if response.status_code != 200:
+                        raise _ModelFailedError(f"HTTP {response.status_code}")
+                    message = response.json()["choices"][0]["message"]
+                    calls = (message.get("tool_calls") or [])[:4]
+                    if not calls:
+                        content = message.get("content")
+                        if not isinstance(content, str) or not content.strip():
+                            raise _ModelFailedError("respuesta vacía")
+                        logger.info(
+                            "IA %s -> chat en %d rondas (%.0f ms)",
+                            model,
+                            round_ + 1,
+                            (time.perf_counter() - started) * 1000,
+                        )
+                        return content, model
+                    convo.append(
+                        {
+                            "role": "assistant",
+                            "content": message.get("content") or "",
+                            "tool_calls": calls,
+                        }
+                    )
+                    for call in calls:
+                        function = call["function"]
+                        result = await execute(
+                            function["name"], parse_arguments(function.get("arguments"))
+                        )
+                        convo.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": call["id"],
+                                "content": json.dumps(result, ensure_ascii=False, default=str),
+                            }
+                        )
+            except httpx.HTTPError as exc:
+                logger.warning("IA %s: error de red %s", model, exc.__class__.__name__)
+            except (_ModelFailedError, ValueError, KeyError, IndexError, TypeError) as exc:
+                logger.warning("IA %s: chat no válido (%s)", model, exc.__class__.__name__)
+        return None
+
     async def advise_team(self, analysis: TeamAnalysis) -> tuple[OakAdvice, str | None]:
         """Consejo del equipo y modelo que lo ha redactado (``None`` si son reglas)."""
         facts = json.dumps(_team_facts(analysis), ensure_ascii=False)
@@ -529,6 +610,21 @@ class OakAI:
                     return fallback, None
                 return query, model
         return rules_query(clean), None
+
+
+class _ModelFailedError(Exception):
+    """El modelo ha respondido algo que no sirve: se prueba con el siguiente."""
+
+
+def parse_arguments(raw: Any) -> dict[str, Any]:
+    """Argumentos de una llamada a herramienta: JSON de un objeto o ``{}``."""
+    if isinstance(raw, dict):
+        return raw
+    try:
+        parsed = json.loads(raw or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _trim_advice(content: Any, fallback: OakAdvice) -> Any:

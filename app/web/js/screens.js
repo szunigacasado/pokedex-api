@@ -25,7 +25,7 @@ export function registerScreens() {
   route("/combate", { title: "Combate", render: renderBattleLobby, nav: { label: "Combate", icon: "bolt", order: 35, hint: "Gana experiencia y evoluciona" } });
   route("/combate/amigo/:code", { title: "Combate contra un amigo", render: renderFriendBattle, parent: "/combate" });
   route("/combate/:id", { title: "Combate", render: renderBattle, parent: "/combate" });
-  route("/oak", { title: "Profesor Oak", render: renderOak, nav: { label: "Profesor Oak", icon: "flask", order: 40, hint: "Pregúntale con tus palabras" } });
+  route("/oak", { title: "Profesor Oak", render: renderOak, nav: { label: "Profesor Oak", icon: "flask", order: 40, hint: "Nota de tu equipo y consejos" } });
   route("/juego", { title: "Adivina la silueta", render: renderGame, nav: { label: "Juego", icon: "gamepad", order: 50, hint: "Adivina la silueta y captura" } });
   route("/estadisticas", { title: "Estadísticas", render: renderStats, nav: { label: "Estadísticas", icon: "chart", order: 60, hint: "Tu progreso en gráficos" } });
 }
