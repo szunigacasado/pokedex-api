@@ -1,0 +1,55 @@
+version: 2
+
+# Las actualizaciones van a `develop`, nunca directamente a `main`: siguen el mismo
+# flujo de pull request y CI que cualquier otro cambio.
+updates:
+  - package-ecosystem: uv
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      dependencias:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # passlib 1.7.4 (obligatorio según el enunciado) no funciona con bcrypt 4.1 o
+      # superior; bcrypt se fija en 4.0.1 a propósito. Ver el PR #25, cerrado.
+      - dependency-name: bcrypt
+        versions: [">=4.1"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
+
+  # Imágenes base del Dockerfile y de compose.yaml (fijadas por digest)
+  - package-ecosystem: docker
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: docker-compose
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore
+      include: scope

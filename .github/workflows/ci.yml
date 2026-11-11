@@ -1,0 +1,219 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Mínimo privilegio: el flujo solo necesita leer el código.
+permissions:
+  contents: read
+
+# Si llega un push nuevo a la misma rama o PR, se cancela la ejecución anterior.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Las acciones de terceros se fijan por SHA (y no por etiqueta, que puede moverse) para
+# evitar ataques a la cadena de suministro. Dependabot las mantiene actualizadas.
+jobs:
+  quality:
+    name: Calidad (ruff y dependencias)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Estilo y errores habituales (ruff check)
+        run: uvx ruff check --output-format=github .
+
+      - name: Formato (ruff format)
+        run: uvx ruff format --check .
+
+      - name: uv.lock coincide con pyproject.toml
+        run: uv lock --check
+
+      - name: requirements.txt coincide con uv.lock
+        run: |
+          uv export --all-groups --no-hashes --no-emit-project --format requirements.txt \
+            --no-header -o /tmp/requirements.txt
+          diff <(grep -v '^#' requirements.txt) <(grep -v '^#' /tmp/requirements.txt) \
+            || { echo "::error::requirements.txt está desactualizado: ejecuta uv export"; exit 1; }
+
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: clave-solo-para-ci-nunca-la-real-0123456789 # clave de pruebas, nunca la real
+      DATABASE_URL: sqlite:///./test.db
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar tests con cobertura
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=80
+
+      - name: Resumen de cobertura
+        if: always()
+        run: |
+          echo "### Cobertura (Python ${{ matrix.python-version }})" >> "$GITHUB_STEP_SUMMARY"
+          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
+
+  web:
+    name: Web (JavaScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      # Sin dependencias: el runner de tests de Node basta para la lógica de la web
+      - name: Tests de la web (node --test)
+        run: node --test "tests/web/*.test.mjs"
+
+  security:
+    name: Seguridad (secretos y dependencias)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # gitleaks lee la lista de commits del PR; solo se le concede lectura.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # todo el historial: un secreto borrado sigue en commits antiguos
+
+      - name: Buscar secretos en el historial (gitleaks)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: "false" # comentar en el PR exigiría permiso de escritura
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      # Vulnerabilidades analizadas y aceptadas (detalle en SECURITY.md):
+      # - PYSEC-2026-1325 (ecdsa, ataque Minerva): afecta a FIRMAR con ECDSA. La API solo
+      #   firma con HMAC (HS256); el código vulnerable no se ejecuta.
+      # - PYSEC-2026-4298 (python-jose, confusión de algoritmo): requiere una clave
+      #   pública y no restringir los algoritmos. La clave es simétrica y decode_token fija
+      #   algorithms=[HS256]; hay tests que intentan el ataque.
+      # python-jose es obligatorio según el enunciado de la práctica.
+      - name: Dependencias con vulnerabilidades conocidas (pip-audit)
+        run: >-
+          uvx pip-audit --requirement requirements.txt --disable-pip --no-deps
+          --progress-spinner off
+          --ignore-vuln PYSEC-2026-1325
+          --ignore-vuln PYSEC-2026-4298
+
+  docker:
+    name: Docker (HTTPS en el puerto 443)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configuración de prueba
+        run: |
+          cp .env.example .env
+          sed -i "s|^SECRET_KEY=.*|SECRET_KEY=$(openssl rand -hex 32)|" .env
+
+      - name: Construir y arrancar la API y Caddy
+        run: docker compose up --build --detach --wait --wait-timeout 180
+
+      - name: Confiar en la CA interna de Caddy
+        run: |
+          for _ in $(seq 30); do
+            docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt caddy-root.crt \
+              2>/dev/null && break
+            sleep 1
+          done
+          openssl x509 -in caddy-root.crt -noout -subject
+
+      - name: Probar la API por HTTPS en el puerto 443
+        run: |
+          set -euo pipefail
+          api() { curl --silent --show-error --fail --cacert caddy-root.crt "$@"; }
+
+          echo "::group::Certificado válido y salud"
+          api --retry 15 --retry-all-errors --retry-delay 1 https://localhost/health
+          echo
+          echo "::endgroup::"
+
+          echo "::group::Cabeceras: HSTS y sin Server ni Via"
+          headers=$(api --dump-header - --output /dev/null https://localhost/health)
+          echo "$headers"
+          grep -qi '^strict-transport-security:' <<<"$headers"
+          if grep -qiE '^(server|via):' <<<"$headers"; then exit 1; fi
+          echo "::endgroup::"
+
+          echo "::group::HTTP redirige a HTTPS con 308"
+          redirect=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' 'http://localhost/docs?x=1')
+          echo "$redirect"
+          test "$redirect" = "308 https://localhost/docs?x=1"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: evil.example' http://localhost/)" = 400
+          echo "::endgroup::"
+
+          echo "::group::Registro, login y ruta protegida"
+          api -X POST https://localhost/api/v1/auth/register -H 'Content-Type: application/json' \
+            -d '{"username":"ci-bot","email":"ci-bot@kanto.dev","password":"Pikachu123"}'
+          echo
+          token=$(api -X POST https://localhost/api/v1/auth/login \
+            -d 'username=ci-bot&password=Pikachu123' | jq -r .access_token)
+          api https://localhost/api/v1/auth/me -H "Authorization: Bearer $token"
+          echo
+          echo "::endgroup::"
+
+          echo "::group::La API no es accesible sin pasar por Caddy"
+          if curl -s --max-time 3 http://localhost:8000/health; then exit 1; fi
+          echo "::endgroup::"
+
+          echo "::group::La API ve la IP real y no acepta X-Forwarded-For falsificado"
+          curl -s -o /dev/null --cacert caddy-root.crt -H 'X-Forwarded-For: 203.0.113.66' \
+            -X POST https://localhost/api/v1/auth/login -d 'username=ci-bot&password=incorrecta'
+          logs=$(docker compose logs api)
+          grep 'Login fallido desde' <<<"$logs"
+          # Ni la IP de Caddy (172.30.0.2) ni la que ha escrito el cliente
+          if grep -qE 'Login fallido desde (172\.30\.0\.2|203\.0\.113\.66)' <<<"$logs"; then
+            exit 1
+          fi
+          echo "::endgroup::"
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Prueba de humo de todos los endpoints a través de Caddy
+        run: |
+          pip install --quiet "httpx==$(grep -oP '^httpx==\K\S+' requirements.txt)"
+          python -m scripts.smoke_test --base-url https://localhost --cacert caddy-root.crt
+
+      - name: Logs de los contenedores
+        if: always()
+        run: docker compose logs
+
+      - name: Parar y borrar los contenedores
+        if: always()
+        run: docker compose down --volumes

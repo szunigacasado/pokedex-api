@@ -1,15 +1,24 @@
 [project]
 name = "pokedex-api"
-version = "0.1.0"
+version = "1.0.0"
 description = "API REST de Pokédex personal: cliente de PokeAPI y servidor FastAPI con autenticación JWT."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+  "bcrypt==4.0.1",
+  "cryptography>=46",
   "fastapi>=0.115",
   "httpx>=0.28",
+  "passlib[bcrypt]>=1.7.4",
+  "pillow>=11.0",
   "pydantic-settings>=2.6",
+  "python-jose[cryptography]>=3.5.0",
+  "python-multipart>=0.0.18",
+  "reportlab>=4.2",
+  "slowapi>=0.1.9",
   "sqlmodel>=0.0.22",
-  "uvicorn[standard]>=0.32",
+  "tzdata>=2025.1",
+  "uvicorn[standard]>=0.54.0",
 ]
 
 [dependency-groups]
@@ -27,7 +36,12 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 addopts = "-ra --strict-markers"
+filterwarnings = [
+  # Aviso de Starlette sobre su cliente de tests; no afecta al código de la aplicación.
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
 
 [tool.coverage.run]
 source = ["app"]
@@ -57,4 +71,7 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"] # en los tests se usa assert
+"tests/**" = [
+  "S101",         # en los tests se usa assert
+  "S105", "S106", # credenciales ficticias de prueba
+]

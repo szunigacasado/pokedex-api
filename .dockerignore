@@ -1,0 +1,16 @@
+# Solo entra en la imagen lo que copia el Dockerfile: dependencias y app/.
+# Todo lo demás se excluye, empezando por los secretos.
+*
+
+!pyproject.toml
+!uv.lock
+!app/
+
+# Aunque estén dentro de app/
+**/__pycache__/
+**/*.py[cod]
+**/.env*
+**/*.db
+**/*.log
+**/*.pem
+**/*.key

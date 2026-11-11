@@ -1,0 +1,38 @@
+# ═════════════════════════════════════════════════════════════
+#  Proxy inverso de la Pokédex API (ver compose.yaml)
+# ═════════════════════════════════════════════════════════════
+{
+	# Sin API de administración: la configuración no se puede cambiar en caliente
+	admin off
+	# HTTP/1.1 y HTTP/2 sobre TCP 443 (HTTP/3 exigiría publicar también UDP)
+	servers {
+		protocols h1 h2
+	}
+	# La CA interna no se instala en el sistema del contenedor
+	skip_install_trust
+}
+
+{$SITE_HOST:localhost} {
+	# Certificado firmado por la CA interna de Caddy (para desarrollo y pruebas). En un
+	# dominio público, quitando esta línea Caddy lo obtiene de Let's Encrypt.
+	tls internal
+
+	encode zstd gzip
+	reverse_proxy api:8000
+
+	# No anunciar el servidor ni el proxy. HSTS y el resto de cabeceras de seguridad
+	# las pone la propia API.
+	header {
+		-Server
+		-Via
+	}
+}
+
+# HTTP → HTTPS con 308 (conserva el método), solo para el host configurado: con
+# cualquier otro Host responde 400 en lugar de redirigir a donde diga el cliente.
+http:// {
+	header -Server
+	@site host {$SITE_HOST:localhost}
+	redir @site https://{host}{uri} 308
+	respond 400
+}
