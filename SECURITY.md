@@ -27,6 +27,7 @@ Al decodificar, el algoritmo está **fijado** (`algorithms=["HS256"]`). Así se 
 
 - **Reutilización de un refresh token:** todos los refresh tokens de un mismo inicio de sesión forman una familia. Si alguien presenta uno ya usado, se interpreta como robo y se revoca la familia entera: ni el atacante ni el usuario legítimo pueden seguir sin volver a entrar.
 - **`POST /auth/logout`:** revoca la familia.
+- **Sesión compartida entre `/docs` y la web:** al entrar desde el propio sitio, el refresh token también se guarda en una cookie `HttpOnly` (ver «Vulnerabilidades Conocidas → Más allá del Top 10»). Así, pulsar *Authorize* en `/docs` deja la sesión iniciada en la web.
 - **Respuestas con tokens:** llevan `Cache-Control: no-store`.
 
 **Inicio de sesión con Google** (OpenID Connect) en [`app/services/google_oauth.py`](app/services/google_oauth.py):
@@ -151,7 +152,8 @@ Con slowapi y una ventana deslizante ([`app/rate_limit.py`](app/rate_limit.py)).
 | IP falsificada con `X-Forwarded-For` | Sin proxy no se acepta de nadie. Con Docker, solo de la IP fija de Caddy. | `test_main_starts_https_and_the_redirect` y el job «Docker» de la CI |
 | Cabeceras de descarga | Los nombres de fichero se reducen a ASCII seguro en `Content-Disposition`. | `test_card_filename_is_safe` |
 | XSS en la web | <ul><li>CSP propia (`script-src 'self'`, sin `unsafe-inline` ni CDN).</li><li>El HTML no tiene código en línea.</li><li>Todo el texto (apodos, notas, nombres) se pinta con `textContent`: el JavaScript no usa `innerHTML`, `eval` ni `document.write`.</li></ul> | `test_index_is_served_with_its_own_strict_csp`, `test_index_has_no_inline_code`, `test_javascript_never_injects_html_or_evaluates_code` |
-| Robo de tokens en la web | <ul><li>El access token vive **solo en memoria**.</li><li>El refresh token va en `sessionStorage` (dura lo que la pestaña) y rota en cada uso.</li><li>Varias peticiones con 401 comparten una única renovación, para no disparar la detección de reutilización.</li><li>Los tokens de Google llegan en el fragmento de la URL, que no se envía a ningún servidor, y se borran del historial al leerlos.</li></ul> | `tests/web/api.test.mjs` |
+| Robo de tokens en la web | <ul><li>El access token vive **solo en memoria**.</li><li>El refresh token de los navegadores va en una cookie **`HttpOnly`** (ningún script puede leerla), `Secure` por HTTPS, `SameSite=Strict` y limitada a `/api/v1/auth`. Rota en cada uso.</li><li>Varias peticiones con 401, también desde varias pestañas (Web Locks), comparten una única renovación, para no disparar la detección de reutilización.</li><li>Los tokens de Google llegan en el fragmento de la URL, que no se envía a ningún servidor, y se borran del historial al leerlos.</li></ul> | `tests/web/api.test.mjs`, `test_reusing_a_rotated_cookie_revokes_the_session` |
+| CSRF y *login CSRF* con la cookie de sesión | La cookie solo se emite y se acepta si la petición viene del propio sitio (cabeceras `Origin` o `Sec-Fetch-Site`), además de `SameSite=Strict`. Una web ajena no puede renovar tu sesión ni dejarte con la de otro. Los clientes de la API, que no envían esas cabeceras, siguen usando el refresh token del cuerpo. | `test_the_cookie_is_ignored_from_another_site`, `test_another_site_cannot_log_you_in`, `test_api_clients_get_no_cookie` |
 
 ### Cadena de suministro
 
