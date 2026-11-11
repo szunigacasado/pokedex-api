@@ -250,9 +250,12 @@ class Battle:
         speed = {i: self.sides[i].current.stats["speed"] for i in attackers}
         tie_break = self.rng.random()
         attackers.sort(key=lambda i: (-speed[i], i if tie_break < 0.5 else -i))
+        # Quién ataca se fija ahora: si el primero debilita al rival, el que entra en su
+        # lugar no usa el ataque que había elegido el anterior (ni ataca este turno).
+        chosen = {i: self.sides[i].current for i in attackers}
         for i in attackers:
-            attacker = self.sides[i].current
-            if not attacker.alive or self.finished:
+            attacker = chosen[i]
+            if not attacker.alive or self.finished or self.sides[i].current is not attacker:
                 continue
             target_side = 1 - i
             defender = self.sides[target_side].current
