@@ -9,14 +9,28 @@ from sqlmodel import Session, SQLModel, create_engine
 from app.config import get_settings
 
 
+def normalize_url(database_url: str) -> str:
+    """Los proveedores de PostgreSQL dan la cadena como ``postgres://`` o
+    ``postgresql://``; SQLAlchemy necesita que se indique el driver (psycopg 3)."""
+    for prefix in ("postgres://", "postgresql://"):
+        if database_url.startswith(prefix):
+            return "postgresql+psycopg://" + database_url.removeprefix(prefix)
+    return database_url
+
+
 def build_engine(database_url: str, **kwargs: Any) -> Engine:
     """Crea el motor de SQLAlchemy adaptado al tipo de base de datos.
 
-    En SQLite se activan las claves foráneas, que por defecto vienen desactivadas: sin
-    ellas la base de datos aceptaría entradas de Pokédex de usuarios inexistentes.
+    - En SQLite se activan las claves foráneas, que por defecto vienen desactivadas: sin
+      ellas la base de datos aceptaría entradas de Pokédex de usuarios inexistentes.
+    - En PostgreSQL se comprueba cada conexión antes de usarla (``pool_pre_ping``): un
+      servidor gestionado puede cerrar las inactivas, y así no falla la primera petición.
     """
+    database_url = normalize_url(database_url)
     is_sqlite = database_url.startswith("sqlite")
     connect_args = {"check_same_thread": False} if is_sqlite else {}
+    if not is_sqlite:
+        kwargs.setdefault("pool_pre_ping", True)
     engine = create_engine(database_url, connect_args=connect_args, **kwargs)
 
     if is_sqlite:

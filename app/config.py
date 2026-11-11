@@ -12,7 +12,7 @@ from functools import lru_cache
 from typing import Annotated, Literal
 
 from limits import parse_many
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 Environment = Literal["development", "production", "test"]
@@ -143,6 +143,13 @@ class Settings(BaseSettings):
     # Hosts permitidos en la cabecera Host (protege de Host header injection y de DNS
     # rebinding). Admite comodines de subdominio: *.ejemplo.com
     allowed_hosts: Annotated[list[str], NoDecode] = ["localhost", "127.0.0.1", "[::1]"]
+    public_hostname: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("PUBLIC_HOSTNAME", "RENDER_EXTERNAL_HOSTNAME"),
+        description="Nombre público con el que se sirve la API desplegada. Se añade a "
+        "ALLOWED_HOSTS y, si no se indica GOOGLE_REDIRECT_URI, se usa para la URI de Google. "
+        "La plataforma de despliegue lo da en RENDER_EXTERNAL_HOSTNAME.",
+    )
     max_body_bytes: int = Field(default=1024 * 1024, ge=1024, le=50 * 1024 * 1024)
     hsts_max_age_seconds: int = Field(default=63_072_000, ge=0)  # 2 años
     docs_enabled: bool = Field(default=True, description="Publicar /docs, /redoc y /openapi.json")
@@ -222,6 +229,20 @@ class Settings(BaseSettings):
             raise ValueError("TLS_CERTFILE y TLS_KEYFILE deben indicarse juntos")
         if self.http_redirect_port == self.https_port:
             raise ValueError("HTTP_REDIRECT_PORT y HTTPS_PORT no pueden ser el mismo puerto")
+        return self
+
+    @model_validator(mode="after")
+    def _apply_public_hostname(self) -> "Settings":
+        """Desplegada, la API se sirve en un nombre que no se conoce hasta crear el servicio:
+        se acepta en la cabecera Host y es la vuelta del login con Google, sin tener que
+        copiarlo a mano en dos variables."""
+        host = (self.public_hostname or "").strip().lower()
+        if not host:
+            return self
+        if host not in self.allowed_hosts:
+            self.allowed_hosts = [*self.allowed_hosts, host]
+        if "google_redirect_uri" not in self.model_fields_set:
+            self.google_redirect_uri = f"https://{host}/api/v1/auth/google/callback"
         return self
 
     @model_validator(mode="after")

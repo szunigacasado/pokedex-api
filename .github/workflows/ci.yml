@@ -78,6 +78,42 @@ jobs:
           echo "### Cobertura (Python ${{ matrix.python-version }})" >> "$GITHUB_STEP_SUMMARY"
           coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
 
+  postgres:
+    name: Tests con PostgreSQL
+    runs-on: ubuntu-latest
+    # Desplegada, la API usa PostgreSQL: toda la suite se pasa también contra uno real
+    services:
+      postgres:
+        image: postgres:17-alpine@sha256:e5d2edd28b1f8d40a0a6c0c9cdc545b19b56a0d5d88f94bc11a97d970d4700d0
+        env:
+          POSTGRES_USER: pokedex
+          POSTGRES_PASSWORD: solo-para-ci # base de datos de usar y tirar dentro del job
+          POSTGRES_DB: pokedex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pokedex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: clave-solo-para-ci-nunca-la-real-0123456789 # clave de pruebas, nunca la real
+      TEST_DATABASE_URL: postgresql://pokedex:solo-para-ci@localhost:5432/pokedex
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar tests contra PostgreSQL
+        run: pytest -q
+
   web:
     name: Web (JavaScript)
     runs-on: ubuntu-latest

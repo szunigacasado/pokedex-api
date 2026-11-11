@@ -51,9 +51,13 @@ def reset_rate_limits() -> None:
 
 @pytest.fixture
 def engine() -> Iterator[Engine]:
-    # StaticPool reutiliza una única conexión: imprescindible con SQLite en memoria,
-    # donde cada conexión nueva vería una base de datos vacía distinta.
-    test_engine = build_engine("sqlite://", poolclass=StaticPool)
+    # Con TEST_DATABASE_URL (la CI lo hace con PostgreSQL) la suite corre contra esa base
+    # de datos, que se vacía después de cada test. Sin ella, SQLite en memoria; StaticPool
+    # reutiliza una única conexión, imprescindible porque cada conexión nueva vería una
+    # base de datos vacía distinta.
+    url = os.environ.get("TEST_DATABASE_URL")
+    test_engine = build_engine(url) if url else build_engine("sqlite://", poolclass=StaticPool)
+    SQLModel.metadata.drop_all(test_engine)
     SQLModel.metadata.create_all(test_engine)
     yield test_engine
     SQLModel.metadata.drop_all(test_engine)
