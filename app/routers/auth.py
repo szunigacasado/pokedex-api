@@ -6,7 +6,7 @@ import uuid
 from datetime import timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import or_, select
 
@@ -24,6 +24,11 @@ from app.config import get_settings
 from app.dependencies import CurrentUser, SessionDep
 from app.models import RefreshRequest, RefreshToken, TokenPair, User, UserCreate, UserRead, utc_now
 from app.rate_limit import limiter
+from app.session_cookie import (
+    clear_refresh_cookie,
+    refresh_token_from_cookie,
+    set_refresh_cookie,
+)
 
 logger = logging.getLogger("pokedex_api.auth")
 
@@ -184,12 +189,27 @@ def login(
 
     response.headers["Cache-Control"] = "no-store"
     logger.info("Login correcto: id=%s", user.id)
-    return issue_token_pair(session, user, family_id=uuid.uuid4().hex)
+    pair = issue_token_pair(session, user, family_id=uuid.uuid4().hex)
+    # Desde el propio sitio (la web o /docs), también en cookie HttpOnly: así iniciar
+    # sesión en /docs la inicia en la web. Ver app/session_cookie.py.
+    set_refresh_cookie(request, response, pair.refresh_token)
+    return pair
 
 
 # ═════════════════════════════════════════════════════════════
 #  Renovación y cierre de sesión
 # ═════════════════════════════════════════════════════════════
+OptionalRefresh = Annotated[RefreshRequest | None, Body()]
+
+
+def _refresh_token(request: Request, payload: RefreshRequest | None) -> str:
+    """El del cuerpo; si no hay, el de la cookie de sesión del propio sitio."""
+    token = payload.refresh_token if payload else refresh_token_from_cookie(request)
+    if not token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=INVALID_SESSION)
+    return token
+
+
 def _load_refresh_token(session: SessionDep, raw_token: str) -> tuple[dict, RefreshToken]:
     try:
         claims = decode_token(raw_token, expected_type="refresh")
@@ -210,14 +230,17 @@ def _load_refresh_token(session: SessionDep, raw_token: str) -> tuple[dict, Refr
 )
 @limiter.limit(rl.TOKEN)
 def refresh(
-    request: Request, payload: RefreshRequest, session: SessionDep, response: Response
+    request: Request, session: SessionDep, response: Response, payload: OptionalRefresh = None
 ) -> TokenPair:
     """Cambia un refresh token por un par de tokens nuevo (**rotación**).
 
     Cada refresh token sirve una sola vez. Si se presenta uno ya usado, se interpreta
     como un posible robo y se revocan todas las sesiones que derivan del mismo login.
+
+    El refresh token va en el cuerpo. Desde la propia web también vale la cookie de
+    sesión (`HttpOnly`), y entonces el cuerpo puede ir vacío.
     """
-    _, stored = _load_refresh_token(session, payload.refresh_token)
+    _, stored = _load_refresh_token(session, _refresh_token(request, payload))
 
     if stored.revoked_at is not None:
         logger.warning(
@@ -233,7 +256,9 @@ def refresh(
     stored.revoked_at = utc_now()
     session.add(stored)
     response.headers["Cache-Control"] = "no-store"
-    return issue_token_pair(session, user, family_id=stored.family_id)
+    pair = issue_token_pair(session, user, family_id=stored.family_id)
+    set_refresh_cookie(request, response, pair.refresh_token)
+    return pair
 
 
 @router.post(
@@ -244,7 +269,7 @@ def refresh(
 )
 @limiter.limit(rl.TOKEN)
 def logout(
-    request: Request, response: Response, payload: RefreshRequest, session: SessionDep
+    request: Request, response: Response, session: SessionDep, payload: OptionalRefresh = None
 ) -> None:
     """Revoca el refresh token y todos los de su misma sesión.
 
@@ -252,7 +277,8 @@ def logout(
     tokens sin estado. Por eso el refresh token, que es el de larga duración, sí se
     controla en la base de datos.
     """
-    _, stored = _load_refresh_token(session, payload.refresh_token)
+    clear_refresh_cookie(request, response)
+    _, stored = _load_refresh_token(session, _refresh_token(request, payload))
     _revoke_family(session, stored.family_id)
 
 
