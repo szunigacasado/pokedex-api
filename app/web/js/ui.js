@@ -2,6 +2,7 @@
 
 import { el } from "./dom.js";
 import { artworkUrl, dexNumber, displayName, typeClass, typeLabel } from "./format.js";
+import { icon } from "./icons.js";
 
 // ── Avisos ───────────────────────────────────────────────────
 export function toast(message, { type = "info", timeout = 4500 } = {}) {
@@ -47,7 +48,7 @@ export function empty(art, title, text, action = null) {
   return el(
     "div",
     { class: "empty" },
-    el("div", { class: "empty__art", "aria-hidden": "true" }, art),
+    el("div", { class: "empty__art" }, icon(art)),
     el("h2", {}, title),
     text ? el("p", {}, text) : null,
     action,
@@ -78,7 +79,7 @@ function cardImage(id, sprite) {
 
 /**
  * Tarjeta de un Pokémon. `href` la convierte en enlace; `onClick`, en botón.
- * `badge` muestra un icono en la esquina (★ favorito, ● capturado…).
+ * `badge` muestra un icono en la esquina (estrella si es favorito, Poké Ball si está capturado).
  */
 export function pokemonCard({ id, name, sprite, types = [], href, onClick, badge, label }) {
   const tag = href ? "a" : "button";
@@ -113,7 +114,7 @@ export function openModal(content, { label = "Detalle", onClose } = {}) {
     el(
       "button",
       { class: "icon-btn modal__close btn--secondary", type: "button", "aria-label": "Cerrar", onClick: () => dialog.close() },
-      "✕",
+      icon("x"),
     ),
     el("div", { class: "modal__body" }, content),
   );
@@ -132,7 +133,7 @@ export function openModal(content, { label = "Detalle", onClose } = {}) {
 
 /** Botón que muestra «Cargando…» mientras se ejecuta una acción asíncrona. */
 export async function busy(button, action, busyText = "Un momento…") {
-  const original = button.textContent;
+  const original = [...button.childNodes]; // conserva el icono además del texto
   button.disabled = true;
   button.setAttribute("aria-busy", "true");
   button.textContent = busyText;
@@ -141,6 +142,6 @@ export async function busy(button, action, busyText = "Un momento…") {
   } finally {
     button.disabled = false;
     button.removeAttribute("aria-busy");
-    button.textContent = original;
+    button.replaceChildren(...original);
   }
 }

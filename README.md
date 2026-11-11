@@ -10,7 +10,7 @@ API REST para que cada entrenador gestione su **Pokédex personal**: busca Poké
 
 Además de lo que pide el enunciado:
 
-- **Una web de la Pokédex en `/`** para usarla sin tecnicismos: acceso guiado, estilo de Pokédex, modo oscuro y un **modo técnico** que enseña en directo cada petición REST.
+- **Una web de la Pokédex en `/`** para usarla sin tecnicismos: acceso guiado, estilo de Pokédex con tema oscuro e iconos propios, y un **modo técnico** que enseña en directo cada petición REST.
 - **Equipos con análisis real:** cobertura de tipos con la tabla oficial de efectividades, exportación a PDF con gráfico radar y fichas descargables de cada Pokémon en PNG o PDF.
 - **El «Profesor Oak», una IA gratuita (Groq)** que aconseja sobre un equipo y entiende búsquedas en lenguaje natural. Si la IA no está disponible, responde igual con reglas.
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
@@ -548,7 +548,8 @@ La API sirve en `/` una web propia ([`app/web/`](app/web/)) para usarla sin cono
 - **Accesible:**
   - Se puede usar entera con el teclado, con un enlace para saltar al contenido y el foco siempre visible.
   - Etiquetas y avisos para lectores de pantalla, y contraste AA.
-  - Respeta «reducir movimiento», tiene modo oscuro y se adapta al móvil.
+  - Respeta «reducir movimiento» y se adapta al móvil.
+- **Iconos propios en SVG** ([`icons.js`](app/web/js/icons.js)) en lugar de emojis: se ven igual en todos los sistemas y heredan el color del texto. Son decorativos para el lector de pantalla, porque el texto del botón ya dice qué hace.
 - **Diseño propio** inspirado en el aparato Pokédex (carcasa roja, lente azul). No copia logotipos ni tipografías oficiales; las ilustraciones son las de PokeAPI.
 - **Segura por construcción.** Medidas en [`SECURITY.md`](SECURITY.md#más-allá-del-top-10):
   - CSP propia, sin scripts ni estilos en línea y sin CDN.
