@@ -4,6 +4,7 @@ import { download } from "../api.js";
 import { el } from "../dom.js";
 import { dexNumber, displayName, formatDate, plural } from "../format.js";
 import { loadCollection, onCollectionChange, releaseEntry, updateEntry } from "../data.js";
+import { sfx } from "../sound.js";
 import { busy, empty, loader, openModal, pokemonCard, showError, toast, typeBadges } from "../ui.js";
 import { badgeLegend, collectionBadge } from "./search.js";
 import { icon } from "../icons.js";
@@ -87,6 +88,7 @@ function editor(entry, close) {
           is_captured: captured.checked,
           favorite: favorite.checked,
         });
+        sfx("success");
         toast("Cambios guardados.", { type: "ok" });
         close();
       } catch (error) {

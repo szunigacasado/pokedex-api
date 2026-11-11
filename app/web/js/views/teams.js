@@ -7,6 +7,7 @@ import { artworkUrl, displayName, matchesQuery, plural, typeLabel } from "../for
 import { radar, weaknessHeatmap } from "../charts.js";
 import { loadCollection } from "../data.js";
 import { markDone } from "../missions.js";
+import { sfx } from "../sound.js";
 import { navigate } from "../router.js";
 import { busy, empty, loader, showError, toast, typeBadge, typeBadges } from "../ui.js";
 import { recommendationsSection, showTeamAdvice } from "./oak.js";
@@ -263,6 +264,7 @@ export async function renderTeamEditor(view, { id }) {
         if (isNew) {
           const created = await request("/api/v1/teams", { method: "POST", json: payload });
           markDone("team");
+          sfx("success");
           toast(`¡Equipo «${created.name}» creado!`, { type: "ok" });
           navigate(`/equipos/${created.id}`);
           return;
@@ -270,6 +272,7 @@ export async function renderTeamEditor(view, { id }) {
         await request(`/api/v1/teams/${id}`, { method: "PUT", json: payload });
         state.dirty = false;
         status.textContent = "Guardado.";
+        sfx("success");
         toast("Equipo guardado.", { type: "ok" });
         loadAnalysis(id);
       } catch (error) {

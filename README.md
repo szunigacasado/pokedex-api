@@ -547,6 +547,10 @@ La API sirve en `/` una web propia ([`app/web/`](app/web/)) para usarla sin cono
 - **La Pokédex que habla.**
   - Cada ficha lee en voz alta su entrada en español con la síntesis de voz del navegador, sin servicios externos ni coste. Mientras habla, la lente azul de la Pokédex se ilumina.
   - Otro botón reproduce el **grito** del Pokémon, del repositorio de gritos de PokeAPI.
+- **Sonido con fundidos** ([`sound.js`](app/web/js/sound.js)).
+  - Los gritos entran y salen con fundido, en lugar de empezar y cortarse de golpe.
+  - Los efectos (capturar, acertar, fallar, misión cumplida, golpes de combate, subir de nivel, victoria) se **sintetizan en el navegador** con Web Audio: sin ficheros ni melodías ajenas.
+  - Un botón de la cabecera silencia todo, y se recuerda.
 - **Adivina la silueta.**
   - Minijuego de 10 rondas: aparece la silueta de un Pokémon de Kanto y hay que elegir entre cuatro nombres, con señuelos del mismo tipo para que no sea fácil.
   - Al acertar se revela con su grito y **se captura en tu Pokédex**. Guarda tu récord.
