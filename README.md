@@ -417,9 +417,15 @@ El nombre del archivo se genera en ASCII (`equipo-equipo-elite-20261109.pdf`), p
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/teams/{id}/advice` 🔒 | Consejo para un equipo: resumen, puntos fuertes, puntos débiles y sugerencias. |
+| `GET` | `/teams/{id}/recommendations` 🔒 | Pokémon **concretos** de Kanto que arreglan las debilidades del equipo, con el motivo (`Resiste Eléctrico (×½)`), primero los que ya tienes. Se calcula con la tabla de tipos, **sin IA**. |
 | `GET` | `/pokemon/ask?q=los 3 de fuego más rápidos` 🔒 | Búsqueda en lenguaje natural sobre los 151 Pokémon de Kanto. |
 
-Las respuestas indican con `source` si las ha redactado la IA (`ai`, con el `model` usado) o las reglas (`rules`). Cómo se evita que la IA invente datos: ver «Profesor Oak» en «Decisiones de Seguridad».
+Las respuestas indican con `source` si las ha redactado la IA (`ai`, con el `model` usado) o las reglas (`rules`).
+
+**En la web («Laboratorio del Profesor Oak»):**
+- **Mejora tu equipo:** eliges un equipo y Oak propone Pokémon concretos para cada problema, con un botón para meterlos en el equipo (si aún no están en tu Pokédex, los añade primero). Debajo, su opinión redactada por la IA.
+- **Pregúntale:** búsqueda en lenguaje natural que enseña **cómo ha entendido la pregunta** (por ejemplo, `Agua · Def. Esp. ≥ 90 · por def. esp.`) y deja añadir cada resultado a tu Pokédex.
+- Si la IA devuelve los filtros vacíos para una frase que sí los tiene, se usan los de las reglas: es mejor eso que devolver los 151 sin criterio. Cómo se evita que la IA invente datos: ver «Profesor Oak» en «Decisiones de Seguridad».
 
 ### v2 (`/api/v2`)
 
