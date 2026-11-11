@@ -7,12 +7,23 @@ from sqlmodel import select
 
 from app import rate_limit as rl
 from app.dependencies import CurrentUser, PokeAPIDep, SessionDep
-from app.models import MAX_TEAM_SIZE, AskResult, PokedexEntry, TeamAdvice, TeamRecommendations
+from app.models import (
+    MAX_TEAM_SIZE,
+    AskResult,
+    OakChatReply,
+    OakChatRequest,
+    PokedexEntry,
+    TeamAdvice,
+    TeamRecommendations,
+    TeamReview,
+)
 from app.rate_limit import limiter
 from app.routers.teams import TeamId, _members_detail, _owned_team, _to_read
 from app.services.ai_oak import MAX_QUESTION_LENGTH, OakAI, explain_query, run_query
+from app.services.oak_chat import OakTools, chat
 from app.services.recommendations import recommend
 from app.services.team_analysis import analyze_team
+from app.services.team_review import review_team
 
 router = APIRouter(tags=["Profesor Oak (IA)"])
 
@@ -142,3 +153,69 @@ async def ask(
         source="ai" if model else "rules",
         model=model,
     )
+
+
+@router.get(
+    "/teams/{team_id}/review",
+    response_model=TeamReview,
+    summary="Nota de un equipo (0-10)",
+    responses={404: {"description": "No existe o no es tuyo"}},
+)
+@limiter.limit(rl.EXTERNAL)
+async def team_review(
+    request: Request,
+    response: Response,
+    team_id: TeamId,
+    user: CurrentUser,
+    session: SessionDep,
+    pokeapi: PokeAPIDep,
+) -> TeamReview:
+    """Nota del equipo de 0 a 10 con su desglose, calculada **por el código** con la tabla
+    de tipos (nunca por la IA), así que siempre es la misma para el mismo equipo:
+
+    - **Defensa (4):** resta por cada tipo de ataque al que el equipo es más débil que
+      resistente (el doble si es una debilidad de medio equipo).
+    - **Ataque (3):** tipos a los que golpea con daño doble, de 18.
+    - **Estadísticas (2):** media de estadísticas base (600 = máximo).
+    - **Equipo completo (1):** huecos ocupados, de 6.
+    """
+    team = _to_read(_owned_team(session, user, team_id))
+    return review_team(analyze_team(team.id, team.name, await _members_detail(pokeapi, team)))
+
+
+@router.post(
+    "/oak/chat",
+    response_model=OakChatReply,
+    summary="Hablar con el Profesor Oak",
+)
+@limiter.limit(rl.AI)
+async def oak_chat(
+    request: Request,
+    response: Response,
+    payload: OakChatRequest,
+    user: CurrentUser,
+    session: SessionDep,
+    pokeapi: PokeAPIDep,
+) -> OakChatReply:
+    """Asistente con IA que **usa la API por ti**: consulta tu colección y tus equipos,
+    pone nota a un equipo, recomienda Pokémon, busca y enseña fichas.
+
+    - Envía la conversación (`messages`, la última del entrenador) y, si quieres, lo que
+      estás viendo (`context.team_id`, `context.pokemon_id`).
+    - `cards` trae los datos que ha consultado (para mostrarlos tal cual) y `tools`, las
+      herramientas que ha usado.
+    - `actions` son **propuestas** (capturar, meter en un equipo, abrir una ficha): Oak no
+      cambia nada; se hacen solo si el entrenador las confirma, con los endpoints normales.
+    - Al modelo no le llegan tus apodos ni tus notas. Sin IA, responde con reglas
+      (`source: "rules"`).
+    """
+    tools = OakTools(
+        session,
+        user,
+        pokeapi,
+        payload.context,
+        owned_team=_owned_team,
+        to_read=_to_read,
+        members_detail=_members_detail,
+    )
+    return await chat(_oak(request), tools, payload)
