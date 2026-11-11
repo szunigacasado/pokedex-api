@@ -244,6 +244,8 @@ Cada funcionalidad sigue el ciclo *issue → rama → commits pequeños → pull
 - **Historial:** cada funcionalidad tiene su issue y su PR enlazados, y se puede recorrer en la pestaña de *pull requests*.
 - **Versión entregada:** la etiqueta `v1.0.0` de `main`; las siguientes versiones (`v1.1.0`, `v1.2.0`) siguen el mismo proceso.
 - **Despliegue (opcional del enunciado):** en Render, definido en [`render.yaml`](render.yaml).
+  - **URL pública:** <https://pokedex-api-ozjr.onrender.com> · documentación Swagger en <https://pokedex-api-ozjr.onrender.com/docs>.
+  - Es el plan gratuito: si nadie la usa en 15 minutos se duerme, y la primera visita tarda alrededor de un minuto en despertarla.
   - Se despliega **solo `main`** y **solo cuando toda la CI está en verde** (`autoDeployTrigger: checksPass`): nunca `develop` ni una rama `features/`.
   - Se construye la misma imagen Docker que prueba la CI, con los datos en PostgreSQL gestionado (Neon). La CI pasa toda la suite también contra PostgreSQL.
   - Ningún secreto está en el código: `SECRET_KEY` la genera la plataforma y el resto (`DATABASE_URL`, Google, Groq) se escribe en su panel.
