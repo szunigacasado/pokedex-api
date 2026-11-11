@@ -149,6 +149,12 @@ def run(smoke: Smoke) -> None:
     )
 
     # ── Pokémon (PokeAPI) ────────────────────────────────────
+    s.check(
+        "GET",
+        "/api/v1/pokemon/kanto",
+        200,
+        lambda r: None if len(r.json()) == 151 else f"{len(r.json())} Pokémon en lugar de 151",
+    )
     s.check("GET", "/api/v1/pokemon/search", 200, has("results"), params={"name": "char"})
     s.check("GET", "/api/v1/pokemon/pikachu", 200, has("id", "types", "stats"))
     s.check("GET", "/api/v1/pokemon/no-existe", 404, label="/api/v1/pokemon/{id} (inexistente)")

@@ -16,7 +16,7 @@ Además de lo que pide el enunciado:
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
 - **API v2** con evoluciones y paginación por cursor, y retirada ordenada de la v1.
 - **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
-- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 480 tests y un 99 % de cobertura.
+- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 525 tests de Python (99 % de cobertura) y 34 de JavaScript.
 
 ## Equipo
 
@@ -199,7 +199,7 @@ uv run python -m scripts.demo
 
 ### Prueba de humo contra la API en marcha
 
-Con la API arrancada (`uv run python -m app`), este script recorre **los 30 endpoints** con un usuario nuevo y comprueba el código de respuesta y el contenido de cada uno. Termina con un resumen como `41/41 comprobaciones correctas`:
+Con la API arrancada (`uv run python -m app`), este script recorre **los 31 endpoints** con un usuario nuevo y comprueba el código de respuesta y el contenido de cada uno. Termina con un resumen como `42/42 comprobaciones correctas`:
 
 ```bash
 uv run python -m scripts.smoke_test
