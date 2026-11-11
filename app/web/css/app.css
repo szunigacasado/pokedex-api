@@ -21,23 +21,23 @@
   --yellow: #ffcb05;
   --green: #2ecc71;
 
-  --bg: #e9ecf3;
-  --screen: #ffffff;
-  --surface: #f5f7fb;
-  --surface-2: #eceff6;
-  --border: #d5dae5;
-  --text: #1d2433;
-  --muted: #5b6475;
+  --bg: #0f1420;
+  --screen: #171d2b;
+  --surface: #1f2738;
+  --surface-2: #283247;
+  --border: #364056;
+  --text: #eef1f7;
+  --muted: #a7b0c2;
   --focus: #ffcb05;
-  --link: #1d4ed8;
-  --ok: #157f3b;
-  --warn: #9a6700;
-  --danger: #b4141f;
+  --link: #8ab4ff;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --danger: #ff7b86;
 
   --radius: 14px;
   --radius-lg: 22px;
-  --shadow: 0 6px 18px rgb(17 24 39 / 12%);
-  --shadow-lg: 0 18px 40px rgb(17 24 39 / 22%);
+  --shadow: 0 6px 18px rgb(0 0 0 / 40%);
+  --shadow-lg: 0 18px 40px rgb(0 0 0 / 55%);
   --speed: 180ms;
 
   /* Colores de los 18 tipos */
@@ -60,45 +60,7 @@
   --t-steel: #60a1b8;
   --t-fairy: #ef70ef;
 
-  color-scheme: light;
-}
-
-:root[data-theme="dark"] {
-  --bg: #0f1420;
-  --screen: #171d2b;
-  --surface: #1f2738;
-  --surface-2: #283247;
-  --border: #364056;
-  --text: #eef1f7;
-  --muted: #a7b0c2;
-  --link: #8ab4ff;
-  --ok: #4ade80;
-  --warn: #fbbf24;
-  --danger: #ff7b86;
-  --shadow: 0 6px 18px rgb(0 0 0 / 40%);
-  --shadow-lg: 0 18px 40px rgb(0 0 0 / 55%);
-
   color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f1420;
-    --screen: #171d2b;
-    --surface: #1f2738;
-    --surface-2: #283247;
-    --border: #364056;
-    --text: #eef1f7;
-    --muted: #a7b0c2;
-    --link: #8ab4ff;
-    --ok: #4ade80;
-    --warn: #fbbf24;
-    --danger: #ff7b86;
-    --shadow: 0 6px 18px rgb(0 0 0 / 40%);
-    --shadow-lg: 0 18px 40px rgb(0 0 0 / 55%);
-
-    color-scheme: dark;
-  }
 }
 
 /* ── Base ───────────────────────────────────────────────────── */
@@ -189,6 +151,55 @@ p {
 
 [hidden] {
   display: none !important;
+}
+
+/* ── Iconos (SVG de trazo, color del texto) ───────────────── */
+.icon {
+  width: 1.15em;
+  height: 1.15em;
+  flex: none;
+  vertical-align: -0.2em;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon--fill polygon,
+.icon--fill circle:first-child,
+.icon__dot {
+  fill: currentcolor;
+}
+
+/* Poké Ball rellena: la mitad superior en color y la línea central se mantiene */
+.icon--fill circle:last-child {
+  fill: var(--screen);
+}
+
+/* Separación con el texto que sigue (en los botones ya la da el gap del flex) */
+:is(h1, h2, h3, p, li, span, figcaption) > .icon:first-child {
+  margin-right: 0.4em;
+}
+
+.legend .icon {
+  margin: 0 0.25rem;
+}
+
+/* La franja de la Poké Ball rellena sigue viéndose */
+.icon--fill path {
+  stroke: var(--screen);
+}
+
+/* Estrella de favorito en amarillo; Poké Ball de capturado en rojo */
+.icon--fill polygon {
+  fill: var(--yellow);
+  stroke: var(--yellow);
+}
+
+.card__badge,
+.legend {
+  color: var(--red-light);
 }
 
 /* ── Carcasa de la Pokédex ──────────────────────────────────── */
@@ -319,10 +330,6 @@ p {
   border-color: var(--red-dark);
 }
 
-.nav__icon {
-  font-size: 1.1rem;
-  line-height: 1;
-}
 
 /* La pantalla */
 .screen {
@@ -330,19 +337,9 @@ p {
   padding: clamp(1rem, 3vw, 2rem);
   background: var(--screen);
   border-radius: var(--radius);
-  border: 6px solid #d9dde6;
+  border: 6px solid #2a3346;
   min-height: 60vh;
   outline: none;
-}
-
-:root[data-theme="dark"] .screen {
-  border-color: #2a3346;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .screen {
-    border-color: #2a3346;
-  }
 }
 
 /* ── Botones y controles ────────────────────────────────────── */
