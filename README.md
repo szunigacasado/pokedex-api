@@ -16,7 +16,7 @@ Además de lo que pide el enunciado:
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
 - **API v2** con evoluciones y paginación por cursor, y retirada ordenada de la v1.
 - **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
-- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 634 tests de Python (97 % de cobertura, también contra PostgreSQL) y 37 de JavaScript.
+- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 638 tests de Python (97 % de cobertura, también contra PostgreSQL) y 37 de JavaScript.
 
 ## Equipo
 
@@ -247,6 +247,7 @@ Cada funcionalidad sigue el ciclo *issue → rama → commits pequeños → pull
   - Se despliega **solo `main`** y **solo cuando toda la CI está en verde** (`autoDeployTrigger: checksPass`): nunca `develop` ni una rama `features/`.
   - Se construye la misma imagen Docker que prueba la CI, con los datos en PostgreSQL gestionado (Neon). La CI pasa toda la suite también contra PostgreSQL.
   - Ningún secreto está en el código: `SECRET_KEY` la genera la plataforma y el resto (`DATABASE_URL`, Google, Groq) se escribe en su panel.
+  - Los límites de intentos usan la IP real de cada visitante (`CLIENT_IP_HEADER=cf-connecting-ip`), no la del proxy de la plataforma, y la API sabe que la conexión original es HTTPS (HSTS).
   - La API no anuncia servidor ni versión. Las cabeceras que añade la propia plataforma no se pueden quitar desde la aplicación.
 
 ## Endpoints
