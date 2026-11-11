@@ -1,0 +1,16 @@
+{
+  // Los tests aparecen en el panel «Pruebas» (el matraz de la barra lateral).
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": ["tests"],
+  // Mismo formato y reglas que la CI (ruff, configurado en pyproject.toml).
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true
+  },
+  "files.exclude": {
+    "**/__pycache__": true,
+    ".pytest_cache": true,
+    ".ruff_cache": true
+  }
+}
