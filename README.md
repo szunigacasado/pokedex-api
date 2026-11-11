@@ -153,6 +153,25 @@ docker compose up --build
   ```
 - En un dominio público, `SITE_HOST=api.midominio.com` y quitar `tls internal` del Caddyfile hace que Caddy obtenga el certificado de Let's Encrypt.
 
+### 4. Publicarla en Internet, gratis (túnel de Cloudflare)
+
+Para enseñarla desde cualquier dispositivo sin abrir puertos del router ni pagar alojamiento:
+
+```bash
+winget install Cloudflare.cloudflared
+uv run python -m app.tunnel
+```
+
+El lanzador ([`app/tunnel.py`](app/tunnel.py)) abre un **túnel rápido** de Cloudflare (sin cuenta), espera la dirección pública `https://….trycloudflare.com` y arranca el servidor HTTPS ya preparado para ella:
+
+- Añade la dirección a `ALLOWED_HOSTS` y la usa como `GOOGLE_REDIRECT_URI`, **solo para esa ejecución** (no toca `.env`).
+- Enseña la URI que hay que añadir en Google Cloud Console para entrar con Google (*APIs y servicios → Credenciales → cliente OAuth → URIs de redireccionamiento autorizados*).
+- El tramo entre `cloudflared` y el servidor también va cifrado y se comprueba con la CA local.
+- Activa `TRUST_CLOUDFLARE_TUNNEL`: los límites de intentos y el bloqueo usan la **IP real** de cada visitante (`CF-Connecting-IP`), que solo se cree si la conexión llega desde la propia máquina. Sin esto, todos los visitantes compartirían la IP de `cloudflared` y sus límites.
+- El servidor sigue escuchando solo en `127.0.0.1`: desde fuera solo se llega por el túnel.
+
+Limitaciones: la dirección **cambia cada vez** que se abre el túnel (y con ella la URI de Google), y la web solo se ve mientras el PC y el proceso estén en marcha. Para una dirección fija haría falta un dominio propio con un túnel con nombre de Cloudflare.
+
 ### 3. Desarrollo (HTTP en el puerto 8000, con recarga automática)
 
 ```bash
