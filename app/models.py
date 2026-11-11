@@ -515,6 +515,28 @@ class AskResultItem(PokemonSummary):
     total: int
 
 
+class RecommendedPokemon(PokemonSummary):
+    total: int
+    in_pokedex: bool = Field(description="Ya está en la Pokédex del entrenador.")
+    captured: bool
+    reason: str = Field(description="Por qué ayuda, calculado con la tabla de tipos.")
+
+
+class Recommendation(SQLModel):
+    kind: Literal["defense", "offense"]
+    target_type: str = Field(description="Tipo de ataque a cubrir o tipo al que golpear.")
+    title: str
+    detail: str
+    useful_types: list[str] = Field(description="Tipos que resuelven el problema.")
+    pokemon: list[RecommendedPokemon]
+
+
+class TeamRecommendations(SQLModel):
+    team_id: int
+    free_slots: int = Field(ge=0, le=MAX_TEAM_SIZE)
+    recommendations: list[Recommendation]
+
+
 class KantoPokemon(PokemonSummary):
     """Un Pokémon del catálogo de Kanto: lo justo para pintar una cuadrícula y filtrar."""
 

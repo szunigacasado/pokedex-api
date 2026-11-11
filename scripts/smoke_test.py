@@ -256,6 +256,13 @@ def run(smoke: Smoke) -> None:
         )
         s.check(
             "GET",
+            f"/api/v1/teams/{team_id}/recommendations",
+            200,
+            has("recommendations", "free_slots"),
+            label="/api/v1/teams/{id}/recommendations",
+        )
+        s.check(
+            "GET",
             f"/api/v1/teams/{team_id}/advice",
             200,
             has("summary", "suggestions", "source"),

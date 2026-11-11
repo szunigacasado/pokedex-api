@@ -6,6 +6,7 @@ import { debounce, el } from "../dom.js";
 import { TYPES, matchesQuery, normalize, plural, typeClass } from "../format.js";
 import { entryFor, loadCollection, loadKanto } from "../data.js";
 import { busy, loader, pokemonCard, showError } from "../ui.js";
+import { icon } from "../icons.js";
 
 const OWNERSHIP = [
   ["all", "Todos"],
@@ -17,12 +18,21 @@ const OWNERSHIP = [
 export function collectionBadge(pokemonId) {
   const entry = entryFor(pokemonId);
   if (!entry) return null;
-  if (entry.favorite) return "★";
-  return entry.is_captured ? "●" : "○";
+  if (entry.favorite) return icon("star", { fill: true });
+  return icon("pokeball", { fill: entry.is_captured });
 }
 
 export function badgeLegend() {
-  return el("p", { class: "legend muted" }, "● capturado · ○ en tu Pokédex sin capturar · ★ favorito");
+  return el(
+    "p",
+    { class: "legend muted" },
+    icon("pokeball", { fill: true }),
+    "capturado · ",
+    icon("pokeball"),
+    "en tu Pokédex sin capturar · ",
+    icon("star", { fill: true }),
+    "favorito",
+  );
 }
 
 export async function renderSearch(view) {

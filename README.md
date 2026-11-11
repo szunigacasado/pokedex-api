@@ -10,13 +10,13 @@ API REST para que cada entrenador gestione su **Pokédex personal**: busca Poké
 
 Además de lo que pide el enunciado:
 
-- **Una web de la Pokédex en `/`** para usarla sin tecnicismos: acceso guiado, estilo de Pokédex, modo oscuro y un **modo técnico** que enseña en directo cada petición REST.
+- **Una web de la Pokédex en `/`** para usarla sin tecnicismos: acceso guiado, estilo de Pokédex con tema oscuro e iconos propios, y un **modo técnico** que enseña en directo cada petición REST.
 - **Equipos con análisis real:** cobertura de tipos con la tabla oficial de efectividades, exportación a PDF con gráfico radar y fichas descargables de cada Pokémon en PNG o PDF.
 - **El «Profesor Oak», una IA gratuita (Groq)** que aconseja sobre un equipo y entiende búsquedas en lenguaje natural. Si la IA no está disponible, responde igual con reglas.
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
 - **API v2** con evoluciones y paginación por cursor, y retirada ordenada de la v1.
 - **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
-- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 525 tests de Python (99 % de cobertura) y 34 de JavaScript.
+- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 541 tests de Python (99 % de cobertura) y 34 de JavaScript.
 
 ## Equipo
 
@@ -199,7 +199,7 @@ uv run python -m scripts.demo
 
 ### Prueba de humo contra la API en marcha
 
-Con la API arrancada (`uv run python -m app`), este script recorre **los 31 endpoints** con un usuario nuevo y comprueba el código de respuesta y el contenido de cada uno. Termina con un resumen como `42/42 comprobaciones correctas`:
+Con la API arrancada (`uv run python -m app`), este script recorre **los 32 endpoints** con un usuario nuevo y comprueba el código de respuesta y el contenido de cada uno. Termina con un resumen como `43/43 comprobaciones correctas`:
 
 ```bash
 uv run python -m scripts.smoke_test
@@ -417,9 +417,15 @@ El nombre del archivo se genera en ASCII (`equipo-equipo-elite-20261109.pdf`), p
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/teams/{id}/advice` 🔒 | Consejo para un equipo: resumen, puntos fuertes, puntos débiles y sugerencias. |
+| `GET` | `/teams/{id}/recommendations` 🔒 | Pokémon **concretos** de Kanto que arreglan las debilidades del equipo, con el motivo (`Resiste Eléctrico (×½)`), primero los que ya tienes. Se calcula con la tabla de tipos, **sin IA**. |
 | `GET` | `/pokemon/ask?q=los 3 de fuego más rápidos` 🔒 | Búsqueda en lenguaje natural sobre los 151 Pokémon de Kanto. |
 
-Las respuestas indican con `source` si las ha redactado la IA (`ai`, con el `model` usado) o las reglas (`rules`). Cómo se evita que la IA invente datos: ver «Profesor Oak» en «Decisiones de Seguridad».
+Las respuestas indican con `source` si las ha redactado la IA (`ai`, con el `model` usado) o las reglas (`rules`).
+
+**En la web («Laboratorio del Profesor Oak»):**
+- **Mejora tu equipo:** eliges un equipo y Oak propone Pokémon concretos para cada problema, con un botón para meterlos en el equipo (si aún no están en tu Pokédex, los añade primero). Debajo, su opinión redactada por la IA.
+- **Pregúntale:** búsqueda en lenguaje natural que enseña **cómo ha entendido la pregunta** (por ejemplo, `Agua · Def. Esp. ≥ 90 · por def. esp.`) y deja añadir cada resultado a tu Pokédex.
+- Si la IA devuelve los filtros vacíos para una frase que sí los tiene, se usan los de las reglas: es mejor eso que devolver los 151 sin criterio. Cómo se evita que la IA invente datos: ver «Profesor Oak» en «Decisiones de Seguridad».
 
 ### v2 (`/api/v2`)
 
@@ -548,7 +554,8 @@ La API sirve en `/` una web propia ([`app/web/`](app/web/)) para usarla sin cono
 - **Accesible:**
   - Se puede usar entera con el teclado, con un enlace para saltar al contenido y el foco siempre visible.
   - Etiquetas y avisos para lectores de pantalla, y contraste AA.
-  - Respeta «reducir movimiento», tiene modo oscuro y se adapta al móvil.
+  - Respeta «reducir movimiento» y se adapta al móvil.
+- **Iconos propios en SVG** ([`icons.js`](app/web/js/icons.js)) en lugar de emojis: se ven igual en todos los sistemas y heredan el color del texto. Son decorativos para el lector de pantalla, porque el texto del botón ya dice qué hace.
 - **Diseño propio** inspirado en el aparato Pokédex (carcasa roja, lente azul). No copia logotipos ni tipografías oficiales; las ilustraciones son las de PokeAPI.
 - **Segura por construcción.** Medidas en [`SECURITY.md`](SECURITY.md#más-allá-del-top-10):
   - CSP propia, sin scripts ni estilos en línea y sin CDN.

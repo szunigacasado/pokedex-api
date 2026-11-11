@@ -6,6 +6,7 @@ import { dexNumber, displayName, formatDate, plural } from "../format.js";
 import { loadCollection, onCollectionChange, releaseEntry, updateEntry } from "../data.js";
 import { busy, empty, loader, openModal, pokemonCard, showError, toast, typeBadges } from "../ui.js";
 import { badgeLegend, collectionBadge } from "./search.js";
+import { icon } from "../icons.js";
 
 const FILTERS = [
   ["all", "Todos"],
@@ -120,7 +121,7 @@ export async function renderCollection(view) {
   });
 
   const exportButton = (format, label) => {
-    const button = el("button", { type: "button", class: "btn btn--secondary" }, label);
+    const button = el("button", { type: "button", class: "btn btn--secondary" }, icon("download"), label);
     button.addEventListener("click", () =>
       busy(button, async () => {
         try {
@@ -151,7 +152,7 @@ export async function renderCollection(view) {
       .sort(SORTS[state.sort][1]);
 
     if (all.length === 0) {
-      body.replaceChildren(empty("📕", "Tu Pokédex está vacía", "Busca un Pokémon y pulsa «Añadir a mi Pokédex».", el("a", { class: "btn btn--primary", href: "#/buscar" }, "🔍 Ir al buscador")));
+      body.replaceChildren(empty("book", "Tu Pokédex está vacía", "Busca un Pokémon y pulsa «Añadir a mi Pokédex».", el("a", { class: "btn btn--primary", href: "#/buscar" }, icon("search"), "Ir al buscador")));
       return;
     }
     body.replaceChildren(
@@ -186,7 +187,7 @@ export async function renderCollection(view) {
   window.addEventListener("hashchange", stop, { once: true });
 
   view.replaceChildren(
-    el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "Mi Pokédex"), el("p", {}, "Toca un Pokémon para ponerle apodo, notas o marcarlo como capturado.")), el("div", { class: "row" }, exportButton("csv", "⬇ CSV"), exportButton("pdf", "⬇ PDF"))),
+    el("div", { class: "page-head" }, el("div", {}, el("h1", {}, "Mi Pokédex"), el("p", {}, "Toca un Pokémon para ponerle apodo, notas o marcarlo como capturado.")), el("div", { class: "row" }, exportButton("csv", "CSV"), exportButton("pdf", "PDF"))),
     el(
       "div",
       { class: "panel row row--between" },

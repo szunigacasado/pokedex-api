@@ -9,6 +9,7 @@ import { session } from "../session.js";
 import { startTour, tourSeen } from "../tour.js";
 import { loader } from "../ui.js";
 import { kantoProgress } from "./collection.js";
+import { icon } from "../icons.js";
 
 function missionsPanel(missions) {
   const done = missions.filter((m) => m.done).length;
@@ -19,7 +20,7 @@ function missionsPanel(missions) {
     el(
       "div",
       { class: "row row--between" },
-      el("h2", { id: "missions-title" }, all ? "🏆 ¡Eres un Maestro Pokédex!" : "🎯 Misiones de entrenador"),
+      el("h2", { id: "missions-title" }, icon(all ? "trophy" : "target"), all ? "¡Eres un Maestro Pokédex!" : "Misiones de entrenador"),
       el("span", { class: "missions__count" }, `${done} de ${missions.length}`),
     ),
     el("progress", { class: "progress", max: missions.length, value: done, "aria-label": "Misiones completadas" }),
@@ -30,7 +31,7 @@ function missionsPanel(missions) {
         el(
           "li",
           { class: `mission ${m.done ? "mission--done" : ""}` },
-          el("span", { class: "mission__icon", "aria-hidden": "true" }, m.done ? "✅" : m.icon),
+          el("span", { class: "mission__icon" }, icon(m.done ? "check-circle" : m.icon)),
           el(
             "div",
             {},
@@ -56,7 +57,7 @@ export async function renderHome(view) {
       el(
         "a",
         { class: "shortcut", href: `#${r.pattern}` },
-        el("span", { class: "shortcut__icon", "aria-hidden": "true" }, r.nav.icon),
+        el("span", { class: "shortcut__icon" }, icon(r.nav.icon)),
         el("span", { class: "shortcut__title" }, r.nav.label),
         el("span", { class: "muted" }, r.nav.hint ?? ""),
       ),
@@ -72,7 +73,7 @@ export async function renderHome(view) {
         el("h1", {}, `¡Hola, ${user?.username ?? "entrenador"}!`),
         el("p", { class: "muted" }, collection.length ? "¿Qué quieres hacer hoy?" : "Tu aventura empieza aquí. Sigue las misiones de abajo."),
       ),
-      el("button", { type: "button", class: "btn btn--secondary", onClick: () => startTour() }, "❓ ¿Cómo funciona?"),
+      el("button", { type: "button", class: "btn btn--secondary", onClick: () => startTour() }, icon("help"), "¿Cómo funciona?"),
     ),
     collection.length ? kantoProgress(collection) : null,
     missionsPanel(missions),

@@ -4,6 +4,7 @@ import { request } from "../api.js";
 import { el, svg } from "../dom.js";
 import { formatDate, percent, plural, typeClass, typeLabel } from "../format.js";
 import { empty, loader, typeBadge } from "../ui.js";
+import { icon } from "../icons.js";
 
 /** Anillo de progreso en SVG (sin librerías). */
 export function ring(value, label) {
@@ -31,8 +32,8 @@ export function ring(value, label) {
   );
 }
 
-function tile(icon, value, label) {
-  return el("div", { class: "tile" }, el("span", { class: "tile__icon", "aria-hidden": "true" }, icon), el("span", { class: "tile__value" }, value), el("span", { class: "tile__label" }, label));
+function tile(iconName, value, label) {
+  return el("div", { class: "tile" }, el("span", { class: "tile__icon" }, icon(iconName)), el("span", { class: "tile__value" }, value), el("span", { class: "tile__label" }, label));
 }
 
 function typeBars(distribution) {
@@ -62,7 +63,7 @@ export async function renderStats(view) {
   if (stats.total_pokemon === 0) {
     view.replaceChildren(
       el("h1", {}, "Estadísticas"),
-      empty("📊", "Todavía no hay nada que contar", "Añade y captura Pokémon para ver aquí tu progreso.", el("a", { class: "btn btn--primary", href: "#/buscar" }, "🔍 Empezar a buscar")),
+      empty("chart", "Todavía no hay nada que contar", "Añade y captura Pokémon para ver aquí tu progreso.", el("a", { class: "btn btn--primary", href: "#/buscar" }, icon("search"), "Empezar a buscar")),
     );
     return;
   }
@@ -79,10 +80,10 @@ export async function renderStats(view) {
       el(
         "div",
         { class: "tiles" },
-        tile("🔥", plural(stats.capture_streak_days, "día"), "Racha actual de capturas"),
-        tile("🏆", plural(stats.longest_streak_days, "día"), "Tu mejor racha"),
-        tile("★", String(stats.favorites), "Favoritos"),
-        el("div", { class: "tile" }, el("span", { class: "tile__icon", "aria-hidden": "true" }, "🧬"), stats.most_common_type ? typeBadge(stats.most_common_type) : el("span", { class: "tile__value" }, "—"), el("span", { class: "tile__label" }, "Tu tipo más común")),
+        tile("flame", plural(stats.capture_streak_days, "día"), "Racha actual de capturas"),
+        tile("trophy", plural(stats.longest_streak_days, "día"), "Tu mejor racha"),
+        tile("star", String(stats.favorites), "Favoritos"),
+        el("div", { class: "tile" }, el("span", { class: "tile__icon" }, icon("shapes")), stats.most_common_type ? typeBadge(stats.most_common_type) : el("span", { class: "tile__value" }, "—"), el("span", { class: "tile__label" }, "Tu tipo más común")),
       ),
     ),
     el("section", { class: "panel stack" }, el("h2", {}, "Tus Pokémon por tipo"), typeBars(stats.type_distribution)),

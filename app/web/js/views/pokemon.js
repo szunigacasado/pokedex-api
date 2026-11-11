@@ -16,6 +16,7 @@ import {
 import { addToCollection, entryFor, loadCollection, loadDetail, loadEvolution, onCollectionChange, updateEntry } from "../data.js";
 import { markDone } from "../missions.js";
 import { busy, loader, showError, toast, typeBadges } from "../ui.js";
+import { icon } from "../icons.js";
 
 /** Piezas extra de la ficha (voz y grito, en otra rama). Reciben (detail, slot). */
 export const pokemonExtras = [];
@@ -45,7 +46,7 @@ function artPanel(detail) {
   let shiny = false;
   const img = el("img", { class: "art__img", src: detail.sprites.official_artwork ?? artworkUrl(detail.id), alt: `Ilustración de ${displayName(detail.name)}`, width: 320, height: 320 });
   const sparkle = el("div", { class: "art__sparkle", "aria-hidden": "true" });
-  const button = el("button", { type: "button", class: "btn btn--secondary btn--small art__shiny", "aria-pressed": "false" }, "✨ Variocolor");
+  const button = el("button", { type: "button", class: "btn btn--secondary btn--small art__shiny", "aria-pressed": "false" }, icon("sparkles"), "Variocolor");
   button.addEventListener("click", () => {
     shiny = !shiny;
     img.src = artworkUrl(detail.id, { shiny });
@@ -75,7 +76,7 @@ function evolutionChain(chain, currentId) {
       el(
         "li",
         { class: "evolution__stage" },
-        index > 0 ? el("span", { class: "evolution__arrow", "aria-hidden": "true" }, "➜") : null,
+        index > 0 ? el("span", { class: "evolution__arrow" }, icon("arrow-right")) : null,
         el(
           "div",
           { class: "evolution__options" },
@@ -100,8 +101,8 @@ function collectionControls(detail) {
   const render = () => {
     const entry = entryFor(detail.id);
     if (!entry) {
-      const add = el("button", { type: "button", class: "btn btn--primary btn--block" }, "➕ Añadir a mi Pokédex");
-      const caught = el("button", { type: "button", class: "btn btn--secondary btn--block" }, "◓ Lo he capturado");
+      const add = el("button", { type: "button", class: "btn btn--primary btn--block" }, icon("plus"), "Añadir a mi Pokédex");
+      const caught = el("button", { type: "button", class: "btn btn--secondary btn--block" }, icon("pokeball"), "Lo he capturado");
       const action = (extra, message) => async (event) =>
         busy(event.currentTarget, async () => {
           try {
@@ -116,8 +117,13 @@ function collectionControls(detail) {
       box.replaceChildren(el("h2", { id: "mine-title" }, "Tu Pokédex"), el("p", { class: "muted" }, "Aún no lo tienes."), add, caught);
       return;
     }
-    const toggle = (field, on, off) => {
-      const button = el("button", { type: "button", class: "btn btn--secondary btn--block", "aria-pressed": String(entry[field]) }, entry[field] ? on : off);
+    const toggle = (field, iconName, on, off) => {
+      const button = el(
+        "button",
+        { type: "button", class: "btn btn--secondary btn--block", "aria-pressed": String(entry[field]) },
+        icon(iconName, { fill: entry[field] }),
+        entry[field] ? on : off,
+      );
       button.addEventListener("click", () =>
         busy(button, async () => {
           try {
@@ -132,8 +138,8 @@ function collectionControls(detail) {
     box.replaceChildren(
       el("h2", { id: "mine-title" }, "Tu Pokédex"),
       el("p", {}, entry.nickname ? `Lo llamas «${entry.nickname}».` : "Está en tu colección."),
-      toggle("is_captured", "● Capturado", "◓ Marcar como capturado"),
-      toggle("favorite", "★ Favorito", "☆ Marcar como favorito"),
+      toggle("is_captured", "pokeball", "Capturado", "Marcar como capturado"),
+      toggle("favorite", "star", "Favorito", "Marcar como favorito"),
       el("a", { class: "btn btn--ghost btn--block", href: "#/pokedex" }, "Editar apodo y notas en Mi Pokédex"),
     );
   };
@@ -151,7 +157,7 @@ export async function renderPokemon(view, { id }) {
   const species = detail.species;
   const name = species?.display_name ?? displayName(detail.name);
 
-  const download_ = el("button", { type: "button", class: "btn btn--secondary btn--block" }, "⬇ Descargar su ficha (PNG)");
+  const download_ = el("button", { type: "button", class: "btn btn--secondary btn--block" }, icon("download"), "Descargar su ficha (PNG)");
   download_.addEventListener("click", () =>
     busy(download_, async () => {
       try {
@@ -172,7 +178,7 @@ export async function renderPokemon(view, { id }) {
   ];
 
   view.replaceChildren(
-    el("a", { class: "back-link", href: "#/buscar" }, "← Volver al buscador"),
+    el("a", { class: "back-link", href: "#/buscar" }, icon("arrow-left"), "Volver al buscador"),
     el(
       "div",
       { class: "detail" },
