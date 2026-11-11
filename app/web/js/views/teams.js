@@ -9,7 +9,7 @@ import { loadCollection } from "../data.js";
 import { markDone } from "../missions.js";
 import { navigate } from "../router.js";
 import { busy, empty, loader, showError, toast, typeBadge, typeBadges } from "../ui.js";
-import { showTeamAdvice } from "./oak.js";
+import { recommendationsSection, showTeamAdvice } from "./oak.js";
 import { icon } from "../icons.js";
 
 const TEAM_SIZE = 6;
@@ -52,6 +52,18 @@ export async function renderTeams(view) {
 // ═════════════════════════════════════════════════════════════
 //  Constructor
 // ═════════════════════════════════════════════════════════════
+/** Pokémon concretos que recomienda Oak; al meter uno, se recalcula toda la página. */
+function recommendationsBlock(team) {
+  const slot = el("div", {}, loader("Buscando Pokémon que encajen…"));
+  recommendationsSection(team, { onTeamChange: () => navigate(`/equipos/${team.id}`) })
+    .then((node) => slot.replaceChildren(node))
+    .catch((error) => {
+      slot.replaceChildren();
+      showError(error);
+    });
+  return el("section", { class: "panel stack" }, el("h3", {}, icon("bulb"), "Pokémon que te recomienda el Profesor Oak"), slot);
+}
+
 function analysisSection(analysis, team) {
   const pdf = el("button", { type: "button", class: "btn btn--secondary" }, icon("download"), "Descargar informe PDF");
   pdf.addEventListener("click", () =>
@@ -89,6 +101,7 @@ function analysisSection(analysis, team) {
         chips("ban", "Sin cobertura ofensiva contra", analysis.not_covered, "¡Cubre todos los tipos!"),
       ),
     ),
+    recommendationsBlock(team),
     el("section", { class: "panel stack" }, el("h3", {}, "Mapa de debilidades"), el("p", { class: "muted" }, "Cuánto daño recibe cada miembro de cada tipo de ataque. Arriba, los ataques más peligrosos para tu equipo."), weaknessHeatmap(analysis)),
   );
 }

@@ -2276,3 +2276,186 @@ body.has-tech-panel {
   font-weight: 900;
   margin: 0;
 }
+
+/* ═════════════════════════════════════════════════════════════
+   Laboratorio del Profesor Oak
+   ═════════════════════════════════════════════════════════════ */
+.segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.chip--muted {
+  color: var(--muted);
+  background: transparent;
+}
+
+.chip--ok {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 50%, var(--border));
+}
+
+.understood {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.4rem 0 0.2rem;
+}
+
+/* Elegir equipo */
+.team-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.team-pick {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.team-pick[aria-pressed="true"] {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 2px var(--yellow);
+}
+
+.team-pick__name {
+  font-weight: 900;
+}
+
+.team-pick__members {
+  display: flex;
+  gap: 0.1rem;
+}
+
+.team-strip {
+  padding: 0.5rem 0.8rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 2px solid var(--border);
+}
+
+/* Recomendaciones */
+.rec {
+  display: grid;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-left: 6px solid var(--lens);
+}
+
+.rec--defense {
+  border-left-color: var(--ok);
+}
+
+.rec__head {
+  display: grid;
+  grid-template-columns: 2.6rem 1fr;
+  gap: 0.7rem;
+  align-items: start;
+}
+
+.rec__head h3,
+.rec__head p {
+  margin: 0;
+}
+
+.rec__icon {
+  display: grid;
+  place-items: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-size: 1.3rem;
+}
+
+.rec--defense .rec__icon {
+  color: var(--ok);
+}
+
+.rec--offense .rec__icon {
+  color: var(--lens);
+}
+
+.rec__types {
+  gap: 0.35rem;
+}
+
+.tiles-pokemon {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.7rem;
+}
+
+.tile-pokemon {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 0.4rem;
+  padding: 0.8rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--screen);
+  border: 2px solid var(--border);
+  text-align: center;
+}
+
+.tile-pokemon__link {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tile-pokemon__link img {
+  filter: drop-shadow(0 6px 6px rgb(0 0 0 / 30%));
+}
+
+.tile-pokemon__name {
+  font-weight: 900;
+}
+
+.tile-pokemon__reason {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--ok);
+}
+
+.tile-pokemon p {
+  margin: 0;
+}
+
+.tile-pokemon__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+}
