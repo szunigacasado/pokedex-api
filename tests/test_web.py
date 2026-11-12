@@ -174,3 +174,14 @@ def test_every_icon_used_exists() -> None:
         used |= set(re.findall(r'adviceList\([^,]+,\s*"([a-z-]+)"', source))
     assert used, "no se ha encontrado ningún icono"
     assert used <= defined, sorted(used - defined)
+
+
+def test_privacy_policy_is_public_and_uses_the_web_csp(client: TestClient) -> None:
+    """Google exige una URL pública de política de privacidad para publicar el login."""
+    response = client.get("/privacidad")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["content-security-policy"] == WEB_CSP
+    assert "Política de privacidad" in response.text
+    assert "<script" not in response.text  # página estática, sin código
