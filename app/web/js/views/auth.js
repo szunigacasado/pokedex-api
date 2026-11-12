@@ -199,6 +199,7 @@ export function renderAuth(view, { onSuccess }) {
         el("div", { class: "segmented", role: "group", "aria-label": "Elige una opción" }, tabs.login, tabs.register),
         formSlot,
         googleSlot,
+        el("p", { class: "legal-link muted" }, el("a", { href: "/privacidad" }, "Política de privacidad")),
       ),
     ),
   );

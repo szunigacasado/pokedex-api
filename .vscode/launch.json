@@ -1,0 +1,37 @@
+{
+  // Arrancar con F5 (o el triángulo verde de «Ejecutar y depurar»). Se pueden poner puntos
+  // de parada en cualquier fichero de app/ y la ejecución se detiene ahí.
+  // Usa el entorno virtual .venv que crea «uv sync».
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Pokédex (https://localhost)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "app",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Pokédex en desarrollo (http://127.0.0.1:8000)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--reload", "--no-server-header", "--no-access-log", "--no-proxy-headers"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": true,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Tests (pytest)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "pytest",
+      "args": ["-q"],
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "console": "integratedTerminal"
+    }
+  ]
+}

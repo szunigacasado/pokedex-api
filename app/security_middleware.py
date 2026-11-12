@@ -54,6 +54,7 @@ STATIC_CACHE: Final = "public, max-age=86400"
 # versión nueva llega al momento y no se queda una antigua en la caché del navegador.
 WEB_CACHE: Final = "no-cache"
 WEB_PREFIXES: Final = ("/web/", "/fonts/")
+WEB_PAGES: Final = ("/", "/privacidad")
 
 _BASE_HEADERS: Final = (
     (b"x-content-type-options", b"nosniff"),
@@ -77,7 +78,7 @@ class SecurityHeadersMiddleware:
             return
 
         path: str = scope["path"]
-        csp = DOCS_CSP if path == "/docs" else WEB_CSP if path == "/" else API_CSP
+        csp = DOCS_CSP if path == "/docs" else WEB_CSP if path in WEB_PAGES else API_CSP
         is_https = scope.get("scheme") == "https"
 
         async def send_with_headers(message: Message) -> None:

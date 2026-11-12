@@ -1,0 +1,4 @@
+{
+  // Al abrir el proyecto, VS Code propone instalar estas extensiones.
+  "recommendations": ["ms-python.python", "ms-python.debugpy", "charliermarsh.ruff"]
+}

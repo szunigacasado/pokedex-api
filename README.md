@@ -16,7 +16,7 @@ Además de lo que pide el enunciado:
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
 - **API v2** con evoluciones y paginación por cursor, y retirada ordenada de la v1.
 - **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
-- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 639 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
+- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 640 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
 
 ## Equipo
 
@@ -135,6 +135,18 @@ Variables (en `.env`):
 - `TLS_CERTFILE` y `TLS_KEYFILE`, para usar un certificado propio, por ejemplo de `mkcert`.
 
 En Linux, los puertos por debajo de 1024 requieren privilegios: usa `HTTPS_PORT=8443` o Docker. Para iniciar sesión con Google por HTTPS, pon `GOOGLE_REDIRECT_URI=https://localhost/api/v1/auth/google/callback` y añade esa URI a las autorizadas en Google Cloud.
+
+### Con Visual Studio Code
+
+El proyecto trae su configuración de VS Code en [`.vscode/`](.vscode/). Abre la carpeta con **Archivo → Abrir carpeta**. La primera vez, acepta las extensiones recomendadas (Python, depurador y Ruff) y ejecuta `uv sync` en la terminal (**Ctrl+ñ**).
+
+| Para | Haz |
+|---|---|
+| **Arrancar la Pokédex** en <https://localhost> | **F5** («Pokédex (https://localhost)»). Funciona con depurador: un clic a la izquierda de una línea de `app/` pone un punto de parada. |
+| Pararla | **Mayús+F5**, o el cuadrado rojo de la barra de depuración. |
+| Modo desarrollo en el 8000 (recarga al guardar) | En «Ejecutar y depurar», elige «Pokédex en desarrollo» y pulsa F5. |
+| Datos de demo, prueba de humo, tests… | **Ctrl+Mayús+P** → «Tasks: Run Task» → una de las tareas «Pokédex: …». Los datos de demo piden la contraseña al lanzarlos. |
+| Ver y lanzar los tests uno a uno | El matraz de la barra lateral (panel «Pruebas»). |
 
 ### 2. HTTPS en el puerto 443 con Docker
 
