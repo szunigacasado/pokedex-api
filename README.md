@@ -16,7 +16,7 @@ Además de lo que pide el enunciado:
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
 - **API v2** con evoluciones y paginación por cursor, y retirada ordenada de la v1.
 - **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
-- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 639 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
+- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 640 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
 
 ## Equipo
 

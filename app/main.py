@@ -129,6 +129,11 @@ def create_app() -> FastAPI:
         def web_index() -> FileResponse:
             return FileResponse(WEB_DIR / "index.html", media_type="text/html; charset=utf-8")
 
+        # URL pública que Google exige para publicar la pantalla de inicio de sesión
+        @app.get("/privacidad", include_in_schema=False)
+        def privacy_policy() -> FileResponse:
+            return FileResponse(WEB_DIR / "privacidad.html", media_type="text/html; charset=utf-8")
+
     @app.get(
         "/health",
         response_model=HealthStatus,
