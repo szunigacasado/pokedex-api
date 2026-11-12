@@ -17,12 +17,12 @@ export function registerScreens() {
 
   route("/buscar", { title: "Buscar", render: renderSearch, nav: { label: "Buscar", icon: "search", order: 10, hint: "Los 151 de Kanto y más" } });
   route("/pokemon/:id", { title: "Ficha", render: renderPokemon, parent: "/buscar" });
-  route("/pokedex", { title: "Mi Pokédex", render: renderCollection, nav: { label: "Mi Pokédex", icon: "book", order: 20, hint: "Tu colección" } });
+  route("/pokedex", { title: "Mi Pokédex", render: renderCollection, nav: { label: "Mi Pokédex", icon: "book", order: 20, primary: true, hint: "Tu colección" } });
   // «nuevo» va antes que «:id»: se comprueban en orden y «nuevo» no es un ID.
-  route("/equipos", { title: "Equipos", render: renderTeams, nav: { label: "Equipos", icon: "swords", order: 30, hint: "Hasta seis y su análisis" } });
+  route("/equipos", { title: "Equipos", render: renderTeams, nav: { label: "Equipos", icon: "swords", order: 30, primary: true, hint: "Hasta seis y su análisis" } });
   route("/equipos/nuevo", { title: "Nuevo equipo", render: renderTeamEditor, parent: "/equipos" });
   route("/equipos/:id", { title: "Equipo", render: renderTeamEditor, parent: "/equipos" });
-  route("/combate", { title: "Combate", render: renderBattleLobby, nav: { label: "Combate", icon: "bolt", order: 35, hint: "Gana experiencia y evoluciona" } });
+  route("/combate", { title: "Combate", render: renderBattleLobby, nav: { label: "Combate", icon: "bolt", order: 35, primary: true, hint: "Gana experiencia y evoluciona" } });
   route("/combate/amigo/:code", { title: "Combate contra un amigo", render: renderFriendBattle, parent: "/combate" });
   route("/combate/:id", { title: "Combate", render: renderBattle, parent: "/combate" });
   route("/oak", { title: "Profesor Oak", render: renderOak, nav: { label: "Profesor Oak", icon: "flask", order: 40, hint: "Nota de tu equipo y consejos" } });

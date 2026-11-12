@@ -1,21 +1,20 @@
-// Tour de primeros pasos: resalta cada sección sobre la propia interfaz y explica para
-// qué sirve. Se abre solo tras crear la cuenta y siempre con «¿Cómo funciona?».
+// Tour: resalta cada parte de la interfaz y explica para qué sirve. Se abre con
+// «Más → ¿Cómo funciona?»; a quien empieza ya le guía la ruta del entrenador del inicio.
 
 import { el, prefs } from "./dom.js";
 
 export const STEPS = [
   {
     title: "¡Bienvenido a tu Pokédex!",
-    text: "Te enseño cómo funciona en unos pocos pasos. Puedes salir cuando quieras con «Saltar» o la tecla Escape.",
+    text: "Te enseño dónde está cada cosa en unos pocos pasos. Puedes salir cuando quieras con «Saltar» o la tecla Escape.",
   },
-  { target: '.nav__link[href="#/buscar"]', title: "1 · Busca Pokémon", text: "Aquí están los 151 de Kanto. Escribe un nombre o un número, filtra por tipo y abre su ficha." },
-  { target: '.nav__link[href="#/pokedex"]', title: "2 · Tu colección", text: "Los Pokémon que añades vienen aquí. Márcalos como capturados, ponles apodo o descárgalos en PDF." },
-  { target: '.nav__link[href="#/equipos"]', title: "3 · Arma tu equipo", text: "Junta hasta seis y descubre sus puntos fuertes y débiles en un mapa de colores." },
-  { target: '.nav__link[href="#/oak"]', title: "4 · El Profesor Oak", text: "Ponle nota a tu equipo y pídele recomendaciones. También lo tienes en todas las pantallas, con el botón «Oak» de abajo a la derecha." },
-  { target: '.nav__link[href="#/juego"]', title: "5 · A jugar", text: "Adivina la silueta de un Pokémon. Si aciertas, lo capturas para tu Pokédex." },
-  { target: '.nav__link[href="#/estadisticas"]', title: "6 · Tu progreso", text: "Gráficos con lo que llevas capturado, tus rachas y tus tipos favoritos." },
+  { target: '.nav__link[href="#/"]', title: "1 · Tu ruta", text: "En el inicio, la ruta del entrenador te dice qué hacer en cada momento: un paso cada vez." },
+  { target: '.nav__link[href="#/pokedex"]', title: "2 · Tu colección", text: "Los Pokémon que capturas vienen aquí. Ponles apodo, márcalos como favoritos o descárgalos en PDF." },
+  { target: '.nav__link[href="#/equipos"]', title: "3 · Tus equipos", text: "Junta hasta seis y descubre sus puntos fuertes y débiles." },
+  { target: '.nav__link[href="#/combate"]', title: "4 · Combate", text: "Contra la máquina o contra un amigo. Ganando, tus Pokémon suben de nivel y evolucionan." },
+  { target: "#nav-more", title: "5 · Más", text: "El buscador de los 151, el juego de la silueta, tus estadísticas y la página del Profesor Oak." },
+  { target: ".oak-fab", title: "6 · El Profesor Oak", text: "Pídele la nota de tu equipo o recomendaciones desde cualquier pantalla." },
   { target: "#tech-toggle", title: "7 · Modo técnico", text: "¿Curiosidad? Enciéndelo y verás cada petición que la web hace a la API REST, en directo." },
-  { target: "#missions", title: "¡Tu primera misión!", text: "Completa estas misiones para dominar la Pokédex. Empieza por buscar un Pokémon y añadirlo." },
 ];
 
 const MARGIN = 8;

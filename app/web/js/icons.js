@@ -43,6 +43,7 @@ const ICONS = {
   gear: gear(),
   user: [["circle", { cx: 12, cy: 8, r: 4 }], ["path", { d: "M4 21a8 8 0 0 1 16 0" }]],
   users: [["circle", { cx: 9, cy: 8, r: 3.5 }], ["path", { d: "M2.5 20a6.5 6.5 0 0 1 13 0" }], ["path", { d: "M15.5 4.6a3.5 3.5 0 0 1 0 6.8" }], ["path", { d: "M18 14.3a6.5 6.5 0 0 1 3.5 5.7" }]],
+  lock: [["rect", { x: 5, y: 11, width: 14, height: 10, rx: 2 }], ["path", { d: "M8 11V7a4 4 0 0 1 8 0v4" }]],
   link: [["path", { d: "M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1" }], ["path", { d: "M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1" }]],
   copy: [["rect", { x: 9, y: 9, width: 11, height: 11, rx: 2 }], ["path", { d: "M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" }]],
   logout: [["path", { d: "M14 4h5a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-5" }], ["polyline", { points: "9 8 5 12 9 16" }], ["line", { x1: 5, y1: 12, x2: 15, y2: 12 }]],
