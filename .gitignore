@@ -52,7 +52,12 @@ htmlcov/
 #  IDE y sistema operativo
 # ─────────────────────────────────────────────────────────────
 .idea/
-.vscode/
+# De VS Code solo se comparten las tareas, el arranque con F5 y las extensiones
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/settings.json
 *.swp
 .DS_Store
 Thumbs.db
