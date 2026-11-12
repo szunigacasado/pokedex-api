@@ -188,6 +188,11 @@ export function spriteUrl(id) {
   return `${SPRITES}/${id}.png`;
 }
 
+/** Sprite de espaldas, para el lado del jugador en los combates. */
+export function backSpriteUrl(id) {
+  return `${SPRITES}/back/${id}.png`;
+}
+
 export function artworkUrl(id, { shiny = false } = {}) {
   return `${SPRITES}/other/official-artwork/${shiny ? "shiny/" : ""}${id}.png`;
 }

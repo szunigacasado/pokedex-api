@@ -8,30 +8,101 @@ import { initTechPanel } from "./techpanel.js";
 import { showError, toast } from "./ui.js";
 import { onCollectionChange } from "./data.js";
 import { watchMissions } from "./missions.js";
+import { isMuted, onMuteChange, setMuted, sfx } from "./sound.js";
 import { renderAuth } from "./views/auth.js";
 import { renderHome } from "./views/home.js";
 import { registerScreens } from "./screens.js";
 import { icon } from "./icons.js";
+import { initOakPanel } from "./oak-chat.js";
+import { startTour } from "./tour.js";
 
 const view = document.getElementById("view");
 const nav = document.getElementById("nav");
 const userMenu = document.getElementById("user-menu");
 
+// ── Sonido ───────────────────────────────────────────────────
+function initSound() {
+  const button = document.getElementById("sound-toggle");
+  const draw = (muted) => {
+    button.setAttribute("aria-pressed", String(muted));
+    button.replaceChildren(icon(muted ? "volume-x" : "volume"), el("span", { class: "visually-hidden" }, "Silenciar el sonido"));
+    button.title = muted ? "Activar el sonido" : "Silenciar el sonido";
+  };
+  button.addEventListener("click", () => setMuted(!isMuted()));
+  onMuteChange(draw);
+  draw(isMuted());
+}
+
 // ── Pantallas ────────────────────────────────────────────────
-route("/", { title: "Inicio", render: renderHome, nav: { label: "Inicio", icon: "home", order: 0 } });
+route("/", { title: "Inicio", render: renderHome, nav: { label: "Inicio", icon: "home", order: 0, primary: true } });
 registerScreens();
 
-function renderNav(active) {
-  nav.replaceChildren(
-    ...navRoutes().map((r) =>
-      el(
-        "a",
-        { class: "nav__link", href: `#${r.pattern}`, "aria-current": r.pattern === active ? "page" : null },
-        icon(r.nav.icon),
-        r.nav.label,
-      ),
-    ),
+// Menú con lo esencial a la vista (Inicio, Mi Pokédex, Equipos, Combate) y el resto en
+// «Más», para que quien empieza no vea ocho botones a la vez.
+function navLink(r, active, extraClass = "") {
+  return el(
+    "a",
+    { class: `nav__link ${extraClass}`.trim(), href: `#${r.pattern}`, "aria-current": r.pattern === active ? "page" : null },
+    icon(r.nav.icon),
+    r.nav.label,
   );
+}
+
+// Un clic fuera cierra «Más» (una sola escucha: el menú se repinta en cada pantalla)
+document.addEventListener("click", (event) => {
+  const menu = document.getElementById("nav-menu");
+  if (menu && !menu.hidden && !menu.contains(event.target)) {
+    menu.hidden = true;
+    document.getElementById("nav-more")?.setAttribute("aria-expanded", "false");
+  }
+});
+
+function renderNav(active) {
+  const routes = navRoutes();
+  const extra = routes.filter((r) => !r.nav.primary);
+  const inMore = extra.some((r) => r.pattern === active);
+  const toggle = el(
+    "button",
+    { type: "button", class: "nav__link nav__more", id: "nav-more", "aria-expanded": "false", "aria-controls": "nav-menu", "aria-current": inMore ? "page" : null },
+    icon("plus"),
+    "Más",
+  );
+  const help = el("button", { type: "button", class: "nav__menu-item" }, icon("help"), "¿Cómo funciona?");
+  const menu = el(
+    "div",
+    { class: "nav__menu", id: "nav-menu", hidden: true },
+    extra.map((r) => el("a", { class: "nav__menu-item", href: `#${r.pattern}`, "aria-current": r.pattern === active ? "page" : null }, icon(r.nav.icon), el("span", {}, el("strong", {}, r.nav.label), el("small", {}, r.nav.hint ?? "")))),
+    help,
+  );
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    if (open) {
+      // Fijo bajo el botón: la barra del menú se desplaza en horizontal y recortaría un
+      // desplegable normal
+      const box = toggle.getBoundingClientRect();
+      const width = Math.min(320, window.innerWidth - 32);
+      menu.style.setProperty("top", `${box.bottom + 8}px`);
+      menu.style.setProperty("left", `${Math.max(16, Math.min(box.left, window.innerWidth - width - 16))}px`);
+      menu.style.setProperty("width", `${width}px`);
+      menu.querySelector("a, button")?.focus();
+    }
+  };
+  toggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setOpen(menu.hidden);
+  });
+  help.addEventListener("click", () => {
+    setOpen(false);
+    startTour();
+  });
+  menu.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      setOpen(false);
+      toggle.focus();
+    }
+  });
+  nav.replaceChildren(...routes.filter((r) => r.nav.primary).map((r) => navLink(r, active)), el("div", { class: "nav__more-wrap" }, toggle, menu));
 }
 
 function renderUserMenu() {
@@ -59,9 +130,11 @@ function renderUserMenu() {
 }
 
 let renderToken = 0;
+let syncOak = () => {};
 
 async function render() {
   const token = ++renderToken;
+  syncOak();
   if (!isLoggedIn()) {
     nav.hidden = true;
     renderUserMenu();
@@ -106,7 +179,12 @@ events.addEventListener("session", (event) => {
 
 async function start() {
   initTechPanel();
-  watchMissions(onCollectionChange, (message) => toast([icon("medal"), message], { type: "ok", timeout: 6000 }));
+  watchMissions(onCollectionChange, (message) => {
+    sfx("mission");
+    toast([icon("medal"), message], { type: "ok", timeout: 6000 });
+  });
+  initSound();
+  syncOak = initOakPanel();
   const fromGoogle = takeTokensFromUrl();
   if (fromGoogle || (await restoreSession())) {
     try {

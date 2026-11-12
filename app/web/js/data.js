@@ -6,6 +6,7 @@ import { events, request } from "./api.js";
 
 let kanto = null;
 let collection = null;
+let progress = null;
 const details = new Map();
 const evolutions = new Map();
 const listeners = new Set();
@@ -14,6 +15,7 @@ const listeners = new Set();
 events.addEventListener("session", (event) => {
   if (!event.detail.loggedIn) {
     collection = null;
+    progress = null;
     notify();
   }
 });
@@ -55,6 +57,26 @@ export async function loadEvolution(id) {
     evolutions.set(id, request(`/api/v2/pokemon/${id}/evolution`).catch(() => null));
   }
   return evolutions.get(id);
+}
+
+// ── Niveles (combates) ───────────────────────────────────────
+/** Nivel de cada entrada de la Pokédex: Map(entry_id → {level, xp, xp_to_next…}). */
+export async function loadProgress({ force = false } = {}) {
+  if (!progress || force) {
+    const rows = await request("/api/v1/progress");
+    progress = new Map(rows.map((row) => [row.entry_id, row]));
+  }
+  return progress;
+}
+
+export function levelOf(entryId) {
+  return progress?.get(entryId)?.level ?? null;
+}
+
+/** Sustituye una entrada de la colección (por ejemplo, tras evolucionar). */
+export function replaceEntry(entry) {
+  collection = (collection ?? []).map((e) => (e.id === entry.id ? entry : e));
+  notify();
 }
 
 // ── Mi colección ─────────────────────────────────────────────

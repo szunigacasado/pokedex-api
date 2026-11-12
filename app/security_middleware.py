@@ -25,6 +25,7 @@ cargarlos en memoria**: mira ``Content-Length`` y, si no viene (``Transfer-Encod
 chunked``), cuenta los bytes según llegan y corta al pasarse.
 """
 
+import ipaddress
 import json
 from typing import Final
 
@@ -177,3 +178,41 @@ class BodySizeLimitMiddleware:
             }
         )
         await send({"type": "http.response.body", "body": body})
+
+
+class TrustedProxyMiddleware:
+    """IP real del visitante y HTTPS cuando la API solo es accesible a través de un proxy.
+
+    En la plataforma de despliegue, todas las peticiones llegan desde su proxy: sin esto,
+    todos los visitantes compartirían su IP (y con ella los límites de intentos) y la API
+    no sabría que la conexión original era HTTPS (sin HSTS).
+
+    - La IP se toma **solo** de ``CLIENT_IP_HEADER`` (por ejemplo ``cf-connecting-ip``),
+      una cabecera que el proxy escribe siempre y que el cliente no puede falsear porque
+      el proxy la sobrescribe. ``X-Forwarded-For`` no sirve: el cliente puede escribir lo
+      que quiera y el proxy solo añade al final.
+    - El esquema se toma de ``X-Forwarded-Proto`` solo si viene esa cabecera de confianza.
+    - Sin ``CLIENT_IP_HEADER`` (en local o con Docker y Caddy) no se activa.
+    """
+
+    def __init__(self, app: ASGIApp, header: str) -> None:
+        self.app = app
+        self.header = header.lower().encode("latin-1")
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] in ("http", "websocket"):
+            headers = dict(scope.get("headers", []))
+            ip = _valid_ip(headers.get(self.header, b"").decode("latin-1").strip())
+            if ip is not None:
+                client = scope.get("client") or (ip, 0)
+                scope = {**scope, "client": (ip, client[1])}
+                if headers.get(b"x-forwarded-proto") == b"https":
+                    scope["scheme"] = "wss" if scope["type"] == "websocket" else "https"
+        await self.app(scope, receive, send)
+
+
+def _valid_ip(value: str) -> str | None:
+    try:
+        return str(ipaddress.ip_address(value))
+    except ValueError:
+        return None

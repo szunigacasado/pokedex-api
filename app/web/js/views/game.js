@@ -7,7 +7,7 @@ import { ROUNDS, newRound, verdict } from "../game.js";
 import { addToCollection, entryFor, loadCollection, loadKanto, updateEntry } from "../data.js";
 import { markDone } from "../missions.js";
 import { loader, showError, toast } from "../ui.js";
-import { playCry } from "../voice.js";
+import { playCry, sfx } from "../sound.js";
 import { icon } from "../icons.js";
 
 async function capture(pokemon) {
@@ -68,7 +68,8 @@ export async function renderGame(view) {
         img.alt = displayName(answer.name);
         buttons[choices.indexOf(answer)].classList.add("game__option--right");
         if (!right) button.classList.add("game__option--wrong");
-        playCry(answer.id, { volume: 0.4 });
+        sfx(right ? "success" : "fail");
+        setTimeout(() => playCry(answer.id, { volume: 0.45 }), 350);
         if (right) {
           score += 1;
           markDone("guess");

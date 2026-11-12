@@ -38,6 +38,7 @@ from app.services.google_oauth import (
     GoogleOAuthClient,
     new_pkce_pair,
 )
+from app.session_cookie import REFRESH_COOKIE, REFRESH_COOKIE_PATH
 
 logger = logging.getLogger("pokedex_api.oauth")
 
@@ -272,4 +273,17 @@ async def google_callback(
         response = JSONResponse(pair.model_dump())
     response.headers["Cache-Control"] = "no-store"
     response.delete_cookie(STATE_COOKIE, path=STATE_COOKIE_PATH)
+    if success_url:
+        # La web recupera la sesión con esta cookie HttpOnly. Aquí no se exige la cabecera
+        # Origin: el regreso desde Google es una navegación iniciada por Google, y el flujo
+        # ya está protegido por state, nonce y PKCE.
+        response.set_cookie(
+            REFRESH_COOKIE,
+            pair.refresh_token,
+            max_age=get_settings().refresh_token_expire_days * 24 * 3600,
+            path=REFRESH_COOKIE_PATH,
+            httponly=True,
+            secure=_cookie_is_secure(request),
+            samesite="strict",
+        )
     return response

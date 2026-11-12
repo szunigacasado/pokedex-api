@@ -1,0 +1,42 @@
+# Despliegue en Render (opcional del enunciado, «Versiones y despliegue desde GitHub»).
+#
+# - Solo se despliega `main`, y solo cuando todas las comprobaciones de la CI están en
+#   verde (autoDeployTrigger: checksPass). Nunca develop ni una rama features/.
+# - Se construye la misma imagen Docker que se prueba en la CI.
+# - Ningún secreto está aquí: SECRET_KEY la genera Render y el resto se escribe en su
+#   panel (sync: false). La dirección pública la da Render en RENDER_EXTERNAL_HOSTNAME,
+#   y la API la añade sola a ALLOWED_HOSTS y a la URI de vuelta de Google.
+services:
+  - type: web
+    name: pokedex-api
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PORT
+        value: "8000"
+      - key: LOG_FORMAT
+        value: json
+      - key: SECRET_KEY
+        generateValue: true
+      # PostgreSQL gestionado (Neon, plan gratuito): el disco del servicio gratuito se
+      # borra en cada despliegue, así que los datos no pueden ir en SQLite.
+      - key: DATABASE_URL
+        sync: false
+      # IP real del visitante: la escribe Cloudflare, delante de la plataforma, y la
+      # sobrescribe siempre (X-Forwarded-For no sirve: el cliente puede falsearlo)
+      - key: CLIENT_IP_HEADER
+        value: cf-connecting-ip
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: OAUTH_SUCCESS_REDIRECT
+        value: /
+      - key: GROQ_API_KEY
+        sync: false

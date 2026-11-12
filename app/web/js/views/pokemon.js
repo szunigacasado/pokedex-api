@@ -15,6 +15,7 @@ import {
 } from "../format.js";
 import { addToCollection, entryFor, loadCollection, loadDetail, loadEvolution, onCollectionChange, updateEntry } from "../data.js";
 import { markDone } from "../missions.js";
+import { sfx } from "../sound.js";
 import { busy, loader, showError, toast, typeBadges } from "../ui.js";
 import { icon } from "../icons.js";
 
@@ -107,6 +108,7 @@ function collectionControls(detail) {
         busy(event.currentTarget, async () => {
           try {
             await addToCollection(detail.id, extra);
+            sfx("capture");
             toast(message, { type: "ok" });
           } catch (error) {
             showError(error);
@@ -128,6 +130,7 @@ function collectionControls(detail) {
         busy(button, async () => {
           try {
             await updateEntry(entry.id, { [field]: !entry[field] });
+            if (!entry[field]) sfx(field === "favorite" ? "success" : "capture");
           } catch (error) {
             showError(error);
           }
