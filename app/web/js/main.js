@@ -165,7 +165,7 @@ async function render() {
   }
   if (token === renderToken) {
     // Cada pantalla empieza arriba, y el lector de pantalla anuncia el contenido nuevo.
-    window.scrollTo({ top: 0 });
+    view.scrollTo({ top: 0 }); // la página es fija: lo que se desplaza es la pantalla
     view.focus({ preventScroll: true });
   }
 }

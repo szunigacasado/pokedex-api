@@ -3663,3 +3663,74 @@ button.shortcut {
   text-align: center;
   font-size: 0.85rem;
 }
+
+/* ═════════════════════════════════════════════════════════════
+   Pantalla fija, como en una consola
+   La página no se desplaza: la carcasa ocupa la ventana y solo se desplaza, por
+   dentro, el contenido de la pantalla cuando no cabe. Solo en la web (clase en
+   index.html); /docs y la política de privacidad se desplazan como siempre.
+   ═════════════════════════════════════════════════════════════ */
+html.app-fixed,
+html.app-fixed body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.app-fixed body {
+  min-height: 0;
+}
+
+html.app-fixed .device {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 2.4rem);
+  height: calc(100dvh - 2.4rem);
+}
+
+html.app-fixed .device__top,
+html.app-fixed .nav {
+  flex: none;
+}
+
+html.app-fixed .screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+@media (width <= 560px) {
+  html.app-fixed .device {
+    height: 100vh;
+    height: 100dvh;
+  }
+}
+
+/* En el móvil, la cabecera en una sola línea: con la página fija, cada línea de
+   cabecera es espacio que pierde la pantalla. El modo técnico (que ocuparía toda la
+   pantalla del móvil) y el nombre de usuario se quedan para el escritorio. */
+@media (width <= 560px) {
+  html.app-fixed .device__top {
+    flex-wrap: nowrap;
+    gap: 0.6rem;
+    padding: 0.6rem 0.8rem;
+  }
+
+  html.app-fixed .lights,
+  html.app-fixed #tech-toggle,
+  html.app-fixed .user-chip__name {
+    display: none;
+  }
+
+  html.app-fixed .top-actions {
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+  }
+
+  html.app-fixed .nav {
+    padding: 0.5rem 0.6rem;
+  }
+}
