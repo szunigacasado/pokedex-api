@@ -12,7 +12,8 @@ from sqlmodel import Session, select
 
 from app.auth import password_needs_rehash, verify_password
 from app.config import get_settings
-from app.models import RefreshToken, User, utc_now
+from app.models import LoginThrottle, RefreshToken, User, utc_now
+from app.rate_limit import limiter
 
 REGISTER = "/api/v1/auth/register"
 LOGIN = "/api/v1/auth/login"
@@ -180,24 +181,61 @@ def test_account_is_locked_after_repeated_failures(client: TestClient, test_user
 
 
 def test_lock_expires(client: TestClient, session: Session, test_user: dict) -> None:
-    user = session.exec(select(User).where(User.username == "ash")).one()
-    user.locked_until = utc_now() - timedelta(seconds=1)
-    session.add(user)
+    for _ in range(get_settings().max_failed_logins):
+        login(client, "ash", "Incorrecta123")
+    throttle = session.exec(select(LoginThrottle)).one()
+    throttle.locked_until = utc_now() - timedelta(seconds=1)
+    session.add(throttle)
     session.commit()
 
     assert login(client, "ash", test_user["password"]).status_code == 200
 
 
-def test_successful_login_resets_failed_attempts(
+def test_successful_login_clears_the_failed_attempts(
     client: TestClient, session: Session, test_user: dict
 ) -> None:
     login(client, "ash", "Incorrecta123")
+    assert session.exec(select(LoginThrottle)).one().failures == 1
+
     login(client, "ash", test_user["password"])
 
     session.expire_all()
-    user = session.exec(select(User).where(User.username == "ash")).one()
-    assert user.failed_login_attempts == 0
-    assert user.locked_until is None
+    assert session.exec(select(LoginThrottle)).all() == []
+
+
+def test_the_lock_only_affects_the_ip_that_failed(
+    client: TestClient, session: Session, test_user: dict
+) -> None:
+    """Cinco contraseñas falsas desde otra IP no dejan al dueño sin acceso desde la suya."""
+    session.add(
+        LoginThrottle(
+            identifier="ash", ip="203.0.113.9", locked_until=utc_now() + timedelta(minutes=15)
+        )
+    )
+    session.commit()
+
+    assert login(client, "ash", test_user["password"]).status_code == 200
+
+
+def test_unknown_users_are_locked_the_same_way(client: TestClient, test_user: dict) -> None:
+    """El bloqueo no revela qué cuentas existen."""
+    responses = {}
+    for name in ("ash", "nadie"):
+        limiter.reset()  # el límite de 10 logins por minuto y por IP es otra protección
+        for _ in range(get_settings().max_failed_logins):
+            assert login(client, name, "Incorrecta123").status_code == 401
+        responses[name] = login(client, name, "Incorrecta123")
+
+    assert responses["ash"].status_code == responses["nadie"].status_code == 429
+    assert responses["ash"].json() == responses["nadie"].json()
+
+
+def test_logout_with_an_invalid_token_still_clears_the_cookie(client: TestClient) -> None:
+    response = client.post("/api/v1/auth/logout", json={"refresh_token": "no-es-un-token"})
+
+    assert response.status_code == 401
+    assert "pokedex_refresh=" in response.headers["set-cookie"]
+    assert "Max-Age=0" in response.headers["set-cookie"]
 
 
 def test_inactive_user_cannot_login(client: TestClient, session: Session, test_user: dict) -> None:

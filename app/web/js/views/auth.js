@@ -67,7 +67,7 @@ function loginForm(onSuccess) {
     problem,
     el("div", { class: "field" }, el("label", { for: "login-user" }, "Usuario o email"), user),
     passField,
-    el("p", { class: "field__hint", id: "login-pass-hint" }, "Si fallas 5 veces seguidas, la cuenta se bloquea 15 minutos por seguridad."),
+    el("p", { class: "field__hint", id: "login-pass-hint" }, "Si fallas 5 veces seguidas, tendrás que esperar 15 minutos para volver a intentarlo."),
     submit,
   );
   form.addEventListener("submit", async (event) => {
