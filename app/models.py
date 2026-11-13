@@ -81,8 +81,8 @@ class User(UserBase, table=True):
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime)
 
-    # Protección contra fuerza bruta: tras varios fallos seguidos la cuenta se bloquea
-    # temporalmente, aunque el atacante cambie de IP.
+    # Ya no se usan: el bloqueo por intentos fallidos está en LoginThrottle, por usuario
+    # e IP. Se conservan para no tener que migrar las bases de datos existentes.
     failed_login_attempts: int = Field(default=0, ge=0)
     locked_until: datetime | None = Field(default=None, sa_type=UTCDateTime)
 
@@ -169,6 +169,24 @@ class OAuthAccount(SQLModel, table=True):
 # ═════════════════════════════════════════════════════════════
 #  Tokens de sesión
 # ═════════════════════════════════════════════════════════════
+class LoginThrottle(SQLModel, table=True):
+    """Intentos fallidos de inicio de sesión de un identificador desde una IP.
+
+    - **Por usuario e IP**, no por cuenta: quien falla desde su IP solo se bloquea a sí
+      mismo. Si el bloqueo fuera de la cuenta, cualquiera podría dejar sin acceso a otro
+      con cinco contraseñas falsas.
+    - **Exista o no el usuario**: la respuesta es la misma, así que el bloqueo no revela
+      qué cuentas existen.
+    - En la base de datos, para que no se pierda si el servidor se reinicia.
+    """
+
+    identifier: str = Field(primary_key=True, max_length=255)
+    ip: str = Field(primary_key=True, max_length=45)
+    failures: int = Field(default=0, ge=0)
+    locked_until: datetime | None = Field(default=None, sa_type=UTCDateTime)
+    updated_at: datetime = Field(default_factory=utc_now, sa_type=UTCDateTime, index=True)
+
+
 class RefreshToken(SQLModel, table=True):
     """Registro de cada refresh token emitido, para poder rotarlos y revocarlos.
 

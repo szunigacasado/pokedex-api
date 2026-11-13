@@ -11,12 +11,20 @@ Seguridad del WebSocket:
 - El token va en el primer mensaje, no en la URL (no queda en los logs).
 - Se comprueba el ``Origin``: una web ajena no puede abrir la conexión con tu sesión
   (*Cross-Site WebSocket Hijacking*).
-- Límite de mensajes por conexión y de tamaño; acciones validadas por el motor.
+- Límite de mensajes por conexión y de conexiones por usuario; acciones validadas por
+  el motor y mensajes que no sean objetos JSON, rechazados.
+- Tiempo máximo para autenticarse y para entrar en la sala.
+- La base de datos solo se usa un instante en cada operación (autenticar, cargar el
+  equipo, guardar el resultado), nunca durante toda la partida: un socket abierto no
+  puede dejar a la API sin conexiones.
 """
 
 import asyncio
 import logging
 import time
+from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Annotated, Any
 from urllib.parse import urlsplit
 
@@ -33,8 +41,9 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from app import rate_limit as rl
+from app.database import get_session
 from app.dependencies import CurrentUser, PokeAPIDep, SessionDep, user_from_token
-from app.models import MAX_DB_ID, utc_now
+from app.models import MAX_DB_ID, User, utc_now
 from app.models import Battle as BattleRecord
 from app.rate_limit import limiter
 from app.routers.battles import side_rewards, team_fighters
@@ -48,6 +57,8 @@ rooms = RoomManager()
 
 AUTH_TIMEOUT_SECONDS = 10
 MAX_MESSAGES_PER_MINUTE = 120
+MAX_SOCKETS_PER_USER = 3
+open_sockets: Counter[int] = Counter()
 
 
 class RoomCreate(BaseModel):
@@ -85,6 +96,30 @@ async def create_room(
 # ═════════════════════════════════════════════════════════════
 #  WebSocket
 # ═════════════════════════════════════════════════════════════
+@contextmanager
+def short_session(ws: WebSocket) -> Iterator[Session]:
+    """Una sesión de base de datos solo para una operación. Respeta la sustitución de
+    ``get_session`` que hacen los tests."""
+    factory = ws.app.dependency_overrides.get(get_session, get_session)
+    sessions = factory()
+    try:
+        yield next(sessions)
+    finally:
+        sessions.close()
+
+
+async def receive_object(ws: WebSocket, timeout: float | None = None) -> dict[str, Any]:
+    """El siguiente mensaje, que tiene que ser un objeto JSON. ``ValueError`` si no lo es."""
+    message = (
+        await asyncio.wait_for(ws.receive_json(), timeout=timeout)
+        if timeout
+        else await ws.receive_json()
+    )
+    if not isinstance(message, dict):
+        raise ValueError("El mensaje no es un objeto JSON.")
+    return message
+
+
 def _same_origin(ws: WebSocket) -> bool:
     origin = ws.headers.get("origin")
     if not origin:
@@ -125,7 +160,7 @@ async def _send(player: Player | None, message: dict[str, Any]) -> None:
 
 async def _finish(
     room: Room,
-    session: Session,
+    ws: WebSocket,
     pokeapi: Any,
     events: list[dict[str, Any]],
     forfeit_side: int | None = None,
@@ -140,6 +175,19 @@ async def _finish(
     if forfeit_side is not None and not engine.finished:
         engine.winner = 1 - forfeit_side
         events = [*events, {"type": "end", "winner": engine.winner}]
+    with short_session(ws) as session:
+        results = await _save_results(room, session, pokeapi, engine, forfeit_side)
+    for side, rewards in results:
+        await _send(room.player(side), {"type": "end", **_state(room, side, events, rewards)})
+    rooms.remove(room.code)
+    logger.info("Reto %s terminado (ganador: %s)", room.code, engine.winner)
+
+
+async def _save_results(
+    room: Room, session: Session, pokeapi: Any, engine: Any, forfeit_side: int | None
+) -> list[tuple[int, list[dict[str, Any]]]]:
+    """Experiencia y registro del combate para cada jugador."""
+    results = []
     for side in (0, 1):
         player = room.player(side)
         rival = room.player(1 - side)
@@ -177,13 +225,12 @@ async def _finish(
             )
         )
         session.commit()
-        await _send(player, {"type": "end", **_state(room, side, events, rewards)})
-    rooms.remove(room.code)
-    logger.info("Reto %s terminado (ganador: %s)", room.code, engine.winner)
+        results.append((side, rewards))
+    return results
 
 
 @router.websocket("/pvp/ws")
-async def pvp_socket(ws: WebSocket, session: SessionDep) -> None:
+async def pvp_socket(ws: WebSocket) -> None:
     if not _same_origin(ws):
         await ws.close(code=1008, reason="Origen no permitido")
         return
@@ -197,19 +244,33 @@ async def pvp_socket(ws: WebSocket, session: SessionDep) -> None:
 
     # 1. Autenticación: el token llega en el primer mensaje, nunca en la URL
     try:
-        first = await asyncio.wait_for(ws.receive_json(), timeout=AUTH_TIMEOUT_SECONDS)
+        first = await receive_object(ws, AUTH_TIMEOUT_SECONDS)
     except (TimeoutError, WebSocketDisconnect, ValueError):
         await ws.close(code=1008)
         return
-    user = user_from_token(session, first.get("token")) if first.get("type") == "auth" else None
+    with short_session(ws) as session:
+        user = user_from_token(session, first.get("token")) if first.get("type") == "auth" else None
     if user is None:
         await fail("Tu sesión no es válida. Vuelve a entrar.", close=True)
         return
-
-    # 2. Entrar en la sala
+    if open_sockets[user.id] >= MAX_SOCKETS_PER_USER:
+        await fail("Tienes demasiados combates abiertos. Cierra alguno.", close=True)
+        return
+    open_sockets[user.id] += 1
     try:
-        join = await ws.receive_json()
-    except (WebSocketDisconnect, ValueError):
+        await _play(ws, user, pokeapi, fail)
+    finally:
+        open_sockets[user.id] -= 1
+        if open_sockets[user.id] <= 0:
+            del open_sockets[user.id]
+
+
+async def _play(ws: WebSocket, user: User, pokeapi: Any, fail: Any) -> None:
+    # 2. Entrar en la sala, también con tiempo máximo
+    try:
+        join = await receive_object(ws, AUTH_TIMEOUT_SECONDS)
+    except (TimeoutError, WebSocketDisconnect, ValueError):
+        await ws.close(code=1008)
         return
     room = rooms.get(str(join.get("code", ""))) if join.get("type") == "join" else None
     if room is None:
@@ -221,11 +282,17 @@ async def pvp_socket(ws: WebSocket, session: SessionDep) -> None:
             await fail("Ese reto ya tiene dos entrenadores.", close=True)
             return
         try:
-            _, fighters = await team_fighters(session, user, int(join.get("team_id", 0)), pokeapi)
-        except (HTTPException, ValueError):  # equipo inexistente, ajeno o vacío
+            team_id = int(join.get("team_id") or 0)
+            with short_session(ws) as session:
+                _, fighters = await team_fighters(session, user, team_id, pokeapi)
+        except (HTTPException, ValueError, TypeError):  # equipo inexistente, ajeno o vacío
             await fail("Elige uno de tus equipos (con al menos un Pokémon).", close=True)
             return
-        room.guest = Player(user.id, user.username, int(join["team_id"]), fighters)
+        # Mientras se cargaba el equipo, otro rival ha podido llegar antes
+        if room.guest is not None or room.finished:
+            await fail("Ese reto ya tiene dos entrenadores.", close=True)
+            return
+        room.guest = Player(user.id, user.username, team_id, fighters)
         side = 1
     me = room.player(side)
     if me is None:
@@ -245,7 +312,11 @@ async def pvp_socket(ws: WebSocket, session: SessionDep) -> None:
     window_start, sent = time.monotonic(), 0
     try:
         while True:
-            message = await ws.receive_json()
+            try:
+                message = await receive_object(ws)
+            except ValueError:
+                await fail("Mensaje no válido.")
+                continue
             if time.monotonic() - window_start > 60:
                 window_start, sent = time.monotonic(), 0
             sent += 1
@@ -255,12 +326,16 @@ async def pvp_socket(ws: WebSocket, session: SessionDep) -> None:
             if room.finished or room.engine is None:
                 continue
             if message.get("type") == "forfeit":
-                await _finish(room, session, pokeapi, [], forfeit_side=side)
+                await _finish(room, ws, pokeapi, [], forfeit_side=side)
                 return
             if message.get("type") != "action":
                 continue
-            action = message.get("action") or {}
-            if side in room.pending or not room.engine.is_valid(side, action):
+            action = message.get("action")
+            if (
+                not isinstance(action, dict)
+                or side in room.pending
+                or not room.engine.is_valid(side, action)
+            ):
                 await fail("Esa acción no está disponible.")
                 continue
             room.pending[side] = {k: v for k, v in action.items() if k in ("type", "index", "to")}
@@ -271,15 +346,15 @@ async def pvp_socket(ws: WebSocket, session: SessionDep) -> None:
                 room.actions.append({str(k): v for k, v in turn.items()})
                 events = room.engine.play_turn(turn)
                 if room.engine.finished:
-                    await _finish(room, session, pokeapi, events)
+                    await _finish(room, ws, pokeapi, events)
                     return
                 for s in (0, 1):
                     await _send(room.player(s), {"type": "turn", **_state(room, s, events)})
-    except (WebSocketDisconnect, ValueError):
+    except WebSocketDisconnect:
         me.socket = None
         if room.engine is not None and not room.finished:
             # Quien se va pierde: así nadie se libra de una derrota cerrando la pestaña
             await _send(room.player(1 - side), {"type": "rival_left"})
-            await _finish(room, session, pokeapi, [], forfeit_side=side)
+            await _finish(room, ws, pokeapi, [], forfeit_side=side)
         elif room.engine is None and side == 0:
             rooms.remove(room.code)
