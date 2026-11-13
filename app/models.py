@@ -537,6 +537,13 @@ class TeamRecommendations(SQLModel):
     recommendations: list[Recommendation]
 
 
+#: Mayor ID que cabe en una columna INTEGER de PostgreSQL. Los IDs se limitan a este valor
+#: para que uno enorme responda 422 y no un 500 de la base de datos (SQLite no admite
+#: enteros de más de 64 bits).
+MAX_DB_ID: Final = 2**31 - 1
+MAX_POKEMON_ID: Final = 100_000
+
+
 # ── Revisión del equipo y asistente ──────────────────────────
 class ReviewPart(SQLModel):
     key: Literal["defense", "offense", "stats", "size"]
@@ -572,7 +579,7 @@ class OakMessage(SQLModel):
 class OakContext(SQLModel):
     """Lo que el entrenador está viendo, para que «este equipo» tenga sentido."""
 
-    team_id: int | None = Field(default=None, ge=1)
+    team_id: int | None = Field(default=None, ge=1, le=MAX_DB_ID)
     pokemon_id: int | None = Field(default=None, ge=1, le=1025)
 
 
@@ -720,8 +727,8 @@ class TeamMember(SQLModel, table=True):
 def _check_team_ids(ids: list[int] | None) -> list[int] | None:
     if ids is None:
         return None
-    if any(i < 1 for i in ids):
-        raise ValueError("Los IDs de Pokémon deben ser positivos.")
+    if any(i < 1 or i > MAX_POKEMON_ID for i in ids):
+        raise ValueError(f"Los IDs de Pokémon van de 1 a {MAX_POKEMON_ID}.")
     if len(set(ids)) != len(ids):
         raise ValueError("Un Pokémon no puede aparecer dos veces en el mismo equipo.")
     return ids
@@ -881,7 +888,7 @@ class Battle(SQLModel, table=True):
 
 
 class BattleCreate(SQLModel):
-    team_id: int = Field(ge=1)
+    team_id: int = Field(ge=1, le=MAX_DB_ID)
     difficulty: Literal["easy", "normal", "hard"] = "normal"
     theme: TypeName | None = Field(default=None, description="Tipo del rival; vacío = variado.")
 

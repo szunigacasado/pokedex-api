@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 from app import rate_limit as rl
 from app.dependencies import CurrentUser, PokeAPIDep, SessionDep
 from app.models import (
+    MAX_DB_ID,
     PokedexEntry,
     PokemonDetail,
     Team,
@@ -39,7 +40,7 @@ router = APIRouter(prefix="/teams", tags=["Equipos"])
 
 MAX_TEAMS_PER_USER = 20
 NOT_FOUND = "Equipo no encontrado."
-TeamId = Annotated[int, Path(ge=1, description="ID del equipo.")]
+TeamId = Annotated[int, Path(ge=1, le=MAX_DB_ID, description="ID del equipo.")]
 
 
 # ═════════════════════════════════════════════════════════════

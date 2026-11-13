@@ -34,8 +34,8 @@ from sqlmodel import Session
 
 from app import rate_limit as rl
 from app.dependencies import CurrentUser, PokeAPIDep, SessionDep, user_from_token
+from app.models import MAX_DB_ID, utc_now
 from app.models import Battle as BattleRecord
-from app.models import utc_now
 from app.rate_limit import limiter
 from app.routers.battles import side_rewards, team_fighters
 from app.services.battle import from_side
@@ -51,7 +51,7 @@ MAX_MESSAGES_PER_MINUTE = 120
 
 
 class RoomCreate(BaseModel):
-    team_id: Annotated[int, Field(ge=1)]
+    team_id: Annotated[int, Field(ge=1, le=MAX_DB_ID)]
 
 
 class RoomCreated(BaseModel):

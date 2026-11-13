@@ -64,7 +64,7 @@ async def search_pokemon(
         Query(min_length=1, max_length=50, description="Texto que debe contener el nombre."),
     ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=100_000)] = 0,
 ) -> PokemonSearchResult:
     """Busca en PokeAPI los Pokémon cuyo nombre contiene `name` (sin distinguir mayúsculas).
 

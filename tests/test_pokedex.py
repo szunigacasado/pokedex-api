@@ -356,14 +356,18 @@ def test_dates_without_timezone_are_taken_as_utc(
     assert body["capture_date"].endswith("Z")
 
 
-def test_null_capture_date_on_a_captured_entry_resets_it_to_now(
+def test_null_capture_date_on_a_captured_entry_is_rejected(
     client: TestClient, auth_headers: dict, add
 ) -> None:
+    """Antes se cambiaba en silencio por la fecha actual y se perdía la original."""
     entry = add(6, is_captured=True, capture_date="2020-01-01T00:00:00Z")
 
-    body = patch(client, auth_headers, entry, {"capture_date": None}).json()
+    response = patch(client, auth_headers, entry, {"capture_date": None})
 
-    assert datetime.fromisoformat(body["capture_date"]).year == datetime.now(UTC).year
+    assert response.status_code == 422
+    assert "márcalo como no capturado" in response.json()["detail"]
+    kept = client.get(f"{POKEDEX}/{entry['id']}", headers=auth_headers).json()
+    assert kept["capture_date"].startswith("2020-01-01")
 
 
 def test_null_clears_optional_texts(client: TestClient, auth_headers: dict, add) -> None:
