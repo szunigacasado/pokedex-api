@@ -135,6 +135,11 @@ class Side:
         return all(not f.alive for f in self.fighters)
 
 
+#: Bits de la semilla de un combate. 31 y no 32: se guarda en una columna INTEGER, que en
+#: PostgreSQL llega hasta 2^31 - 1 (con 32 bits, la mitad de los combates no cabían).
+SEED_BITS: Final = 31
+
+
 def damage(
     attacker: Fighter, defender: Fighter, move: Move, rng: random.Random
 ) -> tuple[int, float, bool]:

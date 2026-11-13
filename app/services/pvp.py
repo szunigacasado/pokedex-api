@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Final
 
-from app.services.battle import Battle, Fighter, Side
+from app.services.battle import SEED_BITS, Battle, Fighter, Side
 
 CODE_ALPHABET: Final = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # sin 0/O ni 1/I, que se confunden
 CODE_LENGTH: Final = 6
@@ -61,7 +61,7 @@ class Room:
         """Empieza el combate cuando ya hay dos jugadores."""
         if self.guest is None:
             raise ValueError("Falta el rival.")
-        self.seed = secrets.randbits(32)
+        self.seed = secrets.randbits(SEED_BITS)
         self.engine = Battle(
             [
                 Side(self.host.username, [Fighter(**f) for f in self.host.fighters]),

@@ -367,3 +367,15 @@ def test_sockets_per_user_are_limited(ws, tokens: dict) -> None:
     finally:
         for sock in sockets:
             sock.__exit__(None, None, None)
+
+
+def test_friendly_battle_seeds_fit_in_the_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pvp_service.secrets, "randbits", lambda bits: 2**bits - 1)
+    from app.services.pokeapi_service import FallbackData
+    from app.services.progress import fighter_setup
+
+    pikachu = [fighter_setup(next(p for p in FallbackData().all_pokemon() if p.id == 25), 10)]
+    room = pvp_service.RoomManager().create(pvp_service.Player(1, "ash", 1, pikachu))
+    room.guest = pvp_service.Player(2, "gary", 2, pikachu)
+    room.start()
+    assert room.seed <= 2**31 - 1

@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
+from app.models import Battle as BattleRecord
 from app.models import PokedexEntry, PokemonProgress
 from app.routers import battles as battles_router
 from tests.fakes import pokemon_payload, with_real_sprites
@@ -283,3 +284,22 @@ def test_rewards_announce_when_a_pokemon_can_evolve(
     reward = next(r for r in battle["rewards"] if r["entry_id"] == entry.id)
     assert reward["level_after"] >= 11
     assert reward["evolves_to"] == "charmeleon"
+
+
+def test_the_largest_seed_fits_in_the_database(
+    client: TestClient,
+    auth_headers: dict,
+    session: Session,
+    api,
+    fire_team: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regresión: con 32 bits, la mitad de las semillas no cabían en el INTEGER de
+    PostgreSQL y empezar un combate fallaba con un 500 una de cada dos veces."""
+    monkeypatch.setattr(battles_router.secrets, "randbits", lambda bits: 2**bits - 1)
+
+    response = client.post("/api/v1/battles", json={"team_id": fire_team}, headers=auth_headers)
+
+    assert response.status_code == 201, response.text
+    stored = session.get(BattleRecord, response.json()["id"])
+    assert stored.seed <= 2**31 - 1
