@@ -86,7 +86,7 @@ Con slowapi y una ventana deslizante ([`app/rate_limit.py`](app/rate_limit.py)).
 | `SECRET_KEY` | Clave que firma todos los JWT | Cualquiera podría crear tokens válidos para cualquier usuario. Es la más crítica. |
 | `GOOGLE_CLIENT_SECRET` | Secreto de la aplicación en Google | Se podría suplantar a la aplicación ante Google. |
 | `GROQ_API_KEY` | Clave de la IA | Consumo de la cuota a nuestra costa. |
-| `DATABASE_URL` | Conexión a la base de datos | Con PostgreSQL incluiría usuario y contraseña. |
+| `DATABASE_URL` | Conexión a la base de datos | Con PostgreSQL (como en el despliegue) incluye usuario y contraseña: solo en el panel de la plataforma, nunca en el código. |
 
 **Cómo se protege:**
 
@@ -188,7 +188,7 @@ Se documentan para que nadie dé por hecha una protección que no existe:
 - **Retos en memoria:** las salas del combate en directo viven en el proceso; si el servidor se reinicia, los combates en curso se pierden (los terminados ya están en la base de datos).
 - **Rate limiting en memoria:** con varias réplicas, cada una cuenta por separado. Para compartir los contadores basta con instalar `redis` y poner `RATE_LIMIT_STORAGE_URI=redis://…`.
 - **Emails sin verificar en las cuentas locales:** por eso el login con Google nunca vincula cuentas por email.
-- **SQLite:** adecuada para un único servidor. Para varios, `DATABASE_URL` admite PostgreSQL instalando su driver (`psycopg`), sin cambiar el código.
+- **Una sola instancia:** el despliegue usa PostgreSQL, pero el rate limiting y las salas de combate en directo viven en la memoria del proceso. Con varias réplicas habría que compartirlos con Redis.
 - **Certificado local:** el navegador avisa hasta que se confía en `certs/ca.pem`. En un dominio público, Caddy obtiene un certificado de Let's Encrypt.
 
 ## Informar de una vulnerabilidad

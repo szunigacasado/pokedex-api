@@ -10,7 +10,9 @@ API REST para que cada entrenador gestione su **Pokédex personal**: busca Poké
 
 Además de lo que pide el enunciado:
 
-- **Una web de la Pokédex en `/`** para usarla sin tecnicismos: acceso guiado, estilo de Pokédex con tema oscuro e iconos propios, y un **modo técnico** que enseña en directo cada petición REST.
+- **Desplegada en Internet:** <https://pokedex-api-ozjr.onrender.com> (documentación en [`/docs`](https://pokedex-api-ozjr.onrender.com/docs)), con PostgreSQL. Se publica sola desde `main` cuando la CI pasa en verde.
+- **Una web de la Pokédex en `/`** para usarla sin tecnicismos: un inicio guiado paso a paso («Ruta del entrenador»), estilo de consola Pokédex con iconos propios, y un **modo técnico** que enseña en directo cada petición REST.
+- **Combates por turnos** contra la máquina (tres dificultades) y **en directo contra un amigo** por WebSocket, con el servidor como árbitro. Los Pokémon ganan experiencia, suben de nivel y evolucionan.
 - **Equipos con análisis real:** cobertura de tipos con la tabla oficial de efectividades, exportación a PDF con gráfico radar y fichas descargables de cada Pokémon en PNG o PDF.
 - **El «Profesor Oak», un asistente con IA gratuita (Groq)** en todas las pantallas: pone nota a tus equipos, recomienda Pokémon y busca por ti **usando la API como herramientas**. Propone cambios (capturar, meter o cambiar un miembro) que solo se hacen si los confirmas. Si la IA no está disponible, responde igual con reglas.
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
@@ -32,7 +34,7 @@ Práctica **individual**, autorizada por el profesor.
 |---|---|
 | Framework | FastAPI |
 | ORM y modelos | SQLModel (Pydantic + SQLAlchemy) |
-| Base de datos | SQLite (PostgreSQL opcional) |
+| Base de datos | SQLite en local; PostgreSQL desplegada (`psycopg`) |
 | Cliente HTTP | httpx (asíncrono) |
 | Configuración | pydantic-settings, variables de entorno |
 | Tests | pytest, pytest-asyncio, respx, pytest-cov |
@@ -51,13 +53,21 @@ pokedex-api/
 │   ├── database.py · models.py · auth.py · dependencies.py
 │   ├── security_middleware.py · middleware.py · rate_limit.py · errors.py
 │   ├── logging_config.py · docs.py
-│   ├── routers/            # auth, oauth, pokemon, pokedex, teams, oak (IA), v2
-│   ├── services/           # PokeAPI, Google, IA, estadísticas, análisis, fichas, exportaciones
+│   ├── session_cookie.py   # Sesión compartida entre /docs y la web (cookie HttpOnly)
+│   ├── routers/            # auth, oauth, pokemon, pokedex, teams, oak (IA), battles, pvp, v2
+│   ├── services/           # PokeAPI, Google, IA y asistente, motor de combates, progresión,
+│   │                       # retos en directo, estadísticas, análisis y nota de equipos,
+│   │                       # recomendaciones, fichas y exportaciones
+│   ├── web/                # Web de la Pokédex (HTML, CSS y JavaScript sin compilación)
+│   │                       # y la política de privacidad
 │   ├── data/               # Respaldo de los 151 Pokémon de Kanto
 │   └── assets/ · static/   # Fuente de las fichas y JavaScript de /docs
+├── scripts/                # Prueba de humo, datos de demostración y datos de respaldo
 ├── deploy/Caddyfile        # Proxy inverso HTTPS (Docker)
-├── tests/                  # Un fichero por módulo, más conftest.py y fakes.py
+├── tests/                  # Un fichero por módulo (más conftest.py y fakes.py) y tests/web
 ├── .github/                # CI y Dependabot
+├── .vscode/                # Arrancar, depurar y lanzar los tests desde VS Code
+├── render.yaml             # Despliegue: solo main y solo con la CI en verde
 ├── SECURITY.md             # Consideraciones de seguridad
 ├── .env.example            # Plantilla de variables de entorno
 ├── Dockerfile          # Imagen multi-stage, sin root
@@ -188,7 +198,7 @@ Qué hace cada opción:
 uv run pytest --cov=app --cov-report=term-missing
 ```
 
-Cada test usa una base de datos SQLite en memoria creada desde cero, así que no deja ficheros ni toca datos reales.
+Cada test usa una base de datos SQLite en memoria creada desde cero, así que no deja ficheros ni toca datos reales. En la CI, la suite entera se pasa además contra un PostgreSQL de verdad (`TEST_DATABASE_URL`).
 
 La lógica de la web (cliente de la API, formatos y mensajes) se prueba con el runner de Node, sin dependencias:
 
@@ -254,7 +264,7 @@ Cada funcionalidad sigue el ciclo *issue → rama → commits pequeños → pull
 
 - **Tablero:** el avance se sigue en el [tablero de GitHub Projects](https://github.com/szunigacasado/pokedex-api/projects), con columnas *Por hacer*, *En curso* y *Hecho*.
 - **Historial:** cada funcionalidad tiene su issue y su PR enlazados, y se puede recorrer en la pestaña de *pull requests*.
-- **Versión entregada:** la etiqueta `v1.0.0` de `main`; las siguientes versiones (`v1.1.0`, `v1.2.0`) siguen el mismo proceso.
+- **Versiones:** cada una es una etiqueta de `main` con su *release* en GitHub. La `v1.0.0` es la entrega inicial que pide el enunciado; después, cada mejora o corrección ha seguido el mismo proceso (`features/` o `fix/` → `develop` → `main` → etiqueta). La última es la de la *release* más reciente.
 - **Despliegue (opcional del enunciado):** en Render, definido en [`render.yaml`](render.yaml).
   - **URL pública:** <https://pokedex-api-ozjr.onrender.com> · documentación Swagger en <https://pokedex-api-ozjr.onrender.com/docs>.
   - Es el plan gratuito: si nadie la usa en 15 minutos se duerme, y la primera visita tarda alrededor de un minuto en despertarla.
@@ -825,9 +835,9 @@ Con más tiempo, por orden de prioridad:
 1. **Access tokens de 15 minutos y lista de `jti` revocados.** Hoy el *logout* revoca el refresh token, pero el access token vale hasta caducar (24 horas, como pide el enunciado).
 2. **Sustituir `python-jose` por `joserfc` o `PyJWT`**, que están mantenidos. Así desaparecerían los dos avisos aceptados en `SECURITY.md`.
 3. **Verificación del email** en las cuentas locales, con un enlace firmado. Permitiría vincular de forma segura una cuenta local con su cuenta de Google.
-4. **PostgreSQL y Redis** para escalar a varias réplicas: base de datos compartida y contadores de rate limiting comunes. La configuración ya lo admite (`DATABASE_URL`, `RATE_LIMIT_STORAGE_URI`).
-5. **Migraciones con Alembic**, en lugar de crear las tablas al arrancar.
-6. **Más IA con el mismo principio** (el código calcula y la IA redacta): un simulador de combate entre dos equipos y una explicación de cada Pokémon pensada para principiantes.
-7. **Funciones sociales:** compartir la Pokédex o un equipo con un enlace de solo lectura que caduque, y medallas por hitos (primeros 50 capturados, un equipo de cada tipo…).
-8. **Despliegue con dominio propio:** Caddy obtiene el certificado de Let's Encrypt automáticamente, y añadiendo un job a la CI cada versión de `main` se desplegaría sola.
+4. **Migraciones con Alembic**, en lugar de crear las tablas al arrancar. Hoy, un cambio en una tabla existente obliga a crear una nueva (como `LoginThrottle`) para no migrar.
+5. **Redis para escalar a varias réplicas:** contadores de rate limiting y salas de combate en directo compartidos. La configuración ya admite `RATE_LIMIT_STORAGE_URI`.
+6. **Borrar la propia cuenta desde la web**, sin tener que pedirlo por correo.
+7. **Funciones sociales:** compartir la Pokédex o un equipo con un enlace de solo lectura que caduque, y clasificaciones de los combates entre amigos.
+8. **Dominio propio** para el despliegue, con Cloudflare Access para limitar quién puede entrar.
 9. **Observabilidad:** métricas de Prometheus (latencia, errores y uso de la IA) y trazas con OpenTelemetry, aprovechando el `X-Request-ID` que ya existe.
