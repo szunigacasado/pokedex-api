@@ -32,8 +32,8 @@ from app.models import (
 )
 from app.rate_limit import limiter
 from app.routers.teams import _members_detail, _owned_team, _to_read
+from app.services.battle import SEED_BITS, Fighter, Side, from_side
 from app.services.battle import Battle as Engine
-from app.services.battle import Fighter, Side, from_side
 from app.services.pokeapi_service import PokeAPIService
 from app.services.progress import (
     DEFAULT_LEVEL,
@@ -202,7 +202,7 @@ async def start_battle(
     nivel parecido (fácil: 3 por debajo; difícil: 3 por encima). `theme` elige el tipo
     del rival (por ejemplo `water`)."""
     team, mine = await team_fighters(session, user, payload.team_id, pokeapi)
-    seed = secrets.randbits(32)
+    seed = secrets.randbits(SEED_BITS)
     legendary, _ = pokeapi.fallback.special_ids()
     rival = generate_rival(
         random.Random(seed ^ 0x5EED),  # noqa: S311  (azar del juego, reproducible)
