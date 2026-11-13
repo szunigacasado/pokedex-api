@@ -6,9 +6,11 @@ dos jugadores se hablan entre sí, como en producción, dentro del mismo bucle.
 """
 
 import asyncio
+import inspect
 import json
 import threading
 import time
+from collections import Counter
 from collections.abc import Iterator
 
 import pytest
@@ -81,6 +83,7 @@ def ws(live: str):
 @pytest.fixture(autouse=True)
 def clean_rooms(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(pvp_router, "rooms", pvp_service.RoomManager())
+    monkeypatch.setattr(pvp_router, "open_sockets", Counter())
     monkeypatch.setattr(pvp_service.secrets, "randbits", lambda _bits: 20261111)
 
     async def no_evolution(*_):
@@ -303,3 +306,64 @@ def test_one_waiting_room_per_trainer() -> None:
     first = manager.create(pvp_service.Player(1, "ash", 1, []))
     second = manager.create(pvp_service.Player(1, "ash", 1, []))
     assert manager.get(first.code) is None and manager.get(second.code) is second
+
+
+# ── Revisión de seguridad ────────────────────────────────────
+def test_the_socket_does_not_hold_a_database_session() -> None:
+    """Una sesión abierta durante toda la partida agotaba las conexiones de la API."""
+    assert list(inspect.signature(pvp_router.pvp_socket).parameters) == ["ws"]
+
+
+def test_joining_has_a_time_limit(ws, tokens: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pvp_router, "AUTH_TIMEOUT_SECONDS", 0.3)
+    with ws() as sock:
+        sock.send_json({"type": "auth", "token": tokens["access_token"]})
+        with pytest.raises(ConnectionClosed):  # no envía el «join»: se le cierra
+            sock.receive_json()
+    time.sleep(0.2)
+    assert sum(pvp_router.open_sockets.values()) == 0  # se libera su plaza
+
+
+def test_messages_must_be_json_objects(
+    ws, client: TestClient, auth_headers: dict, tokens: dict, api, fire_team: int, gary: dict
+) -> None:
+    with ws() as sock:
+        sock.send_json([])  # en lugar del objeto de autenticación
+        with pytest.raises(ConnectionClosed):
+            sock.receive_json()
+
+    code = open_room(client, auth_headers, fire_team)
+    with ws() as host, ws() as guest:
+        connect(host, tokens["access_token"], code)
+        connect(guest, gary["token"], code, gary["team_id"])
+        receive_until(host, "start")
+        host.send_json(1)
+        assert receive_until(host, "error")["message"] == "Mensaje no válido."
+        host.send_json({"type": "action", "action": "atacar"})
+        assert receive_until(host, "error")["message"] == "Esa acción no está disponible."
+        # La partida sigue
+        host.send_json({"type": "action", "action": {"type": "move", "index": 0}})
+        assert receive_until(host, "waiting_rival")
+
+
+def test_a_guest_with_a_strange_team_id_is_refused(
+    ws, client: TestClient, auth_headers: dict, tokens: dict, api, fire_team: int, gary: dict
+) -> None:
+    code = open_room(client, auth_headers, fire_team)
+    with ws() as guest:
+        connect(guest, gary["token"], code, {"no": "es un número"})
+        assert "Elige uno de tus equipos" in guest.receive_json()["message"]
+
+
+def test_sockets_per_user_are_limited(ws, tokens: dict) -> None:
+    sockets = [ws() for _ in range(pvp_router.MAX_SOCKETS_PER_USER + 1)]
+    opened = [sock.__enter__() for sock in sockets]
+    try:
+        for sock in opened[:-1]:
+            sock.send_json({"type": "auth", "token": tokens["access_token"]})
+        time.sleep(0.5)  # que el servidor cuente los anteriores
+        opened[-1].send_json({"type": "auth", "token": tokens["access_token"]})
+        assert "demasiados combates" in opened[-1].receive_json()["message"]
+    finally:
+        for sock in sockets:
+            sock.__exit__(None, None, None)
