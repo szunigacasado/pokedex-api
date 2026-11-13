@@ -20,14 +20,14 @@ KEY = "k" * 32
 def test_rate_limit_exceeded(client: TestClient) -> None:
     """Test del enunciado: la 11.ª petición de login en un minuto devuelve 429.
 
-    Se usa un usuario inexistente para que el 429 sea del rate limit por IP y no del
-    bloqueo de la cuenta por intentos fallidos.
+    Cada intento usa un usuario distinto para que el 429 sea del rate limit por IP y no
+    del bloqueo por intentos fallidos (que cuenta por usuario e IP).
     """
-    for _ in range(10):
-        response = client.post(LOGIN, data={"username": "nadie", "password": "Mal12345"})
+    for i in range(10):
+        response = client.post(LOGIN, data={"username": f"nadie{i}", "password": "Mal12345"})
         assert response.status_code == 401
 
-    response = client.post(LOGIN, data={"username": "nadie", "password": "Mal12345"})
+    response = client.post(LOGIN, data={"username": "nadie10", "password": "Mal12345"})
 
     assert response.status_code == 429
     assert response.json()["limit"] == "10 per 1 minute"
