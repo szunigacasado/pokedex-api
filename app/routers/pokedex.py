@@ -22,6 +22,7 @@ from app import rate_limit as rl
 from app.config import get_settings
 from app.dependencies import CurrentUser, PokeAPIDep, SessionDep
 from app.models import (
+    MAX_DB_ID,
     PokedexEntry,
     PokedexEntryCreate,
     PokedexEntryRead,
@@ -40,7 +41,7 @@ logger = logging.getLogger("pokedex_api.pokedex")
 router = APIRouter(prefix="/pokedex", tags=["Pokédex"])
 
 NOT_FOUND = "Entrada de Pokédex no encontrada."
-EntryId = Annotated[int, Path(ge=1, description="ID de la entrada en tu Pokédex.")]
+EntryId = Annotated[int, Path(ge=1, le=MAX_DB_ID, description="ID de la entrada en tu Pokédex.")]
 
 
 class SortField(StrEnum):
@@ -184,7 +185,7 @@ def list_entries(
     sort: Annotated[SortField, Query(description="Campo de ordenación.")] = SortField.pokemon_id,
     order: Annotated[SortOrder, Query(description="Sentido de la ordenación.")] = SortOrder.asc,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    offset: Annotated[int, Query(ge=0, le=MAX_DB_ID)] = 0,
 ) -> PokedexPage:
     """Lista la Pokédex del usuario con filtros, ordenación y paginación.
 
@@ -370,7 +371,8 @@ def update_entry(
     Reglas de captura:
     - Marcar `is_captured: true` sin fecha usa la fecha actual (si no tenía ya una).
     - Marcar `is_captured: false` borra la fecha de captura.
-    - No se admite una fecha de captura en un Pokémon no capturado.
+    - No se admite una fecha de captura en un Pokémon no capturado, ni `capture_date: null`
+      en uno capturado (para quitarla, se desmarca como capturado).
     """
     entry = _owned_entry(session, user, entry_id)
     changes = payload.model_dump(exclude_unset=True)
@@ -382,6 +384,16 @@ def update_entry(
                 detail="Solo un Pokémon capturado puede tener fecha de captura.",
             )
         changes["capture_date"] = None
+    if (
+        "capture_date" in changes
+        and changes["capture_date"] is None
+        and changes.get("is_captured", entry.is_captured)
+    ):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Un Pokémon capturado necesita fecha de captura. Para quitarla, "
+            "márcalo como no capturado (`is_captured: false`).",
+        )
     for field in ("is_captured", "favorite"):
         if field in changes and changes[field] is None:
             raise HTTPException(
