@@ -7,7 +7,9 @@ from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import delete
 from sqlmodel import or_, select
 
 from app import rate_limit as rl
@@ -22,7 +24,16 @@ from app.auth import (
 )
 from app.config import get_settings
 from app.dependencies import CurrentUser, SessionDep
-from app.models import RefreshRequest, RefreshToken, TokenPair, User, UserCreate, UserRead, utc_now
+from app.models import (
+    LoginThrottle,
+    RefreshRequest,
+    RefreshToken,
+    TokenPair,
+    User,
+    UserCreate,
+    UserRead,
+    utc_now,
+)
 from app.rate_limit import limiter
 from app.session_cookie import (
     clear_refresh_cookie,
@@ -144,45 +155,54 @@ def login(
     el botón **Authorize** de Swagger funciona directamente. En `username` se acepta
     también el email.
 
-    Tras varios intentos fallidos seguidos la cuenta se bloquea unos minutos y se responde
-    `429` con la cabecera `Retry-After`.
+    Tras varios intentos fallidos seguidos **desde la misma IP** para el mismo usuario (o
+    email), ese usuario queda bloqueado unos minutos **solo desde esa IP** y se responde
+    `429` con la cabecera `Retry-After`. Es igual si el usuario no existe, así que el
+    bloqueo no revela qué cuentas hay.
     """
     settings = get_settings()
     identifier = form.username.strip().lower()
-    user = session.exec(
-        select(User).where(or_(User.username == identifier, User.email == identifier))
-    ).first()
-
     now = utc_now()
-    if user is not None and user.locked_until is not None and user.locked_until > now:
-        retry_after = math.ceil((user.locked_until - now).total_seconds())
-        logger.warning("Login sobre cuenta bloqueada: id=%s ip=%s", user.id, _client_ip(request))
+    ip = _client_ip(request)
+    key = (identifier[:255], ip[:45])
+    throttle = session.get(LoginThrottle, key)
+    if throttle is not None and throttle.locked_until is not None and throttle.locked_until > now:
+        retry_after = math.ceil((throttle.locked_until - now).total_seconds())
+        logger.warning("Login bloqueado por intentos fallidos desde %s", ip)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Demasiados intentos fallidos. Vuelve a intentarlo más tarde.",
             headers={"Retry-After": str(retry_after)},
         )
 
+    user = session.exec(
+        select(User).where(or_(User.username == identifier, User.email == identifier))
+    ).first()
     password_ok = verify_password(form.password, user.hashed_password if user else None)
 
     if user is None or not password_ok or not user.is_active:
-        if user is not None and not password_ok:
-            user.failed_login_attempts += 1
-            if user.failed_login_attempts >= settings.max_failed_logins:
-                user.locked_until = now + timedelta(minutes=settings.lockout_minutes)
-                user.failed_login_attempts = 0
-                logger.warning("Cuenta bloqueada por intentos fallidos: id=%s", user.id)
-            session.add(user)
-            session.commit()
-        logger.warning("Login fallido desde %s", _client_ip(request))
+        throttle = throttle or LoginThrottle(identifier=key[0], ip=key[1])
+        throttle.failures += 1
+        throttle.updated_at = now
+        if throttle.failures >= settings.max_failed_logins:
+            throttle.locked_until = now + timedelta(minutes=settings.lockout_minutes)
+            throttle.failures = 0
+            logger.warning("Bloqueo por intentos fallidos desde %s", ip)
+        session.add(throttle)
+        # Limpieza: los registros sin actividad desde hace un día ya no sirven
+        session.exec(
+            delete(LoginThrottle).where(LoginThrottle.updated_at < now - timedelta(days=1))
+        )  # type: ignore[call-overload]
+        session.commit()
+        logger.warning("Login fallido desde %s", ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=INVALID_CREDENTIALS,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user.failed_login_attempts = 0
-    user.locked_until = None
+    if throttle is not None:
+        session.delete(throttle)
     if password_needs_rehash(user.hashed_password):
         user.hashed_password = hash_password(form.password)
     session.add(user)
@@ -264,13 +284,14 @@ def refresh(
 @router.post(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Cerrar sesión",
     responses={401: {"description": "Refresh token no válido"}},
 )
 @limiter.limit(rl.TOKEN)
 def logout(
     request: Request, response: Response, session: SessionDep, payload: OptionalRefresh = None
-) -> None:
+) -> Response | None:
     """Revoca el refresh token y todos los de su misma sesión.
 
     El access token sigue siendo válido hasta que caduca: es la contrapartida de usar
@@ -278,8 +299,18 @@ def logout(
     controla en la base de datos.
     """
     clear_refresh_cookie(request, response)
-    _, stored = _load_refresh_token(session, _refresh_token(request, payload))
+    try:
+        _, stored = _load_refresh_token(session, _refresh_token(request, payload))
+    except HTTPException as exc:
+        # Una HTTPException descartaría las cabeceras de `response`: la cookie debe
+        # borrarse igualmente, aunque el token ya no valga.
+        failed = JSONResponse(
+            {"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers
+        )
+        clear_refresh_cookie(request, failed)
+        return failed
     _revoke_family(session, stored.family_id)
+    return None
 
 
 # ═════════════════════════════════════════════════════════════

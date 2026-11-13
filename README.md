@@ -16,7 +16,7 @@ Además de lo que pide el enunciado:
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
 - **API v2** con evoluciones y paginación por cursor, y retirada ordenada de la v1.
 - **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
-- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 640 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
+- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 662 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
 
 ## Equipo
 
@@ -273,7 +273,7 @@ La documentación completa e interactiva está en **`/docs`** (Swagger). Para pr
 | Método | Ruta | Auth | Descripción |
 |---|---|:-:|---|
 | `POST` | `/register` | — | Crea una cuenta. Valida email con regex y la política de contraseñas. `201` o `409` si ya existe. |
-| `POST` | `/login` | — | Formulario OAuth2 (`username`, `password`). Devuelve access token (24 h) y refresh token (7 días). `429` si la cuenta está bloqueada. |
+| `POST` | `/login` | — | Formulario OAuth2 (`username`, `password`). Devuelve access token (24 h) y refresh token (7 días). `429` si ese usuario está bloqueado desde esa IP por intentos fallidos. |
 | `POST` | `/refresh` | — | Cambia un refresh token por un par nuevo (rotación). Reutilizar uno ya usado revoca la sesión entera. |
 | `POST` | `/logout` | — | Revoca el refresh token y los de su misma sesión. `204`. |
 | `GET` | `/me` | 🔒 | Datos del usuario autenticado. |
@@ -514,13 +514,13 @@ Implementado con **slowapi** en [`app/rate_limit.py`](app/rate_limit.py). Usa un
 
 **¿Por qué límites diferentes?** Cada tipo de endpoint tiene un coste y un riesgo distintos:
 - **Registro (5/hora):** es el más estricto porque una persona real se registra una vez. Un límite bajo frena la creación masiva de cuentas falsas (*bots*, *spam*) sin molestar a nadie.
-- **Login (10/minuto):** permite equivocarse de contraseña varias veces, pero hace inviable probar miles de contraseñas por fuerza bruta. Además hay un bloqueo de la cuenta tras 5 fallos, porque el límite por IP se puede esquivar cambiando de IP y el bloqueo por cuenta no.
+- **Login (10/minuto):** permite equivocarse de contraseña varias veces, pero hace inviable probar miles de contraseñas por fuerza bruta. Además, 5 fallos seguidos con el mismo usuario desde la misma IP lo bloquean 15 minutos desde esa IP.
 - **Llamadas a PokeAPI (30/minuto):** cada petición nuestra genera peticiones a un servicio **externo y gratuito**. Si no se limitan, un solo cliente podría hacer que PokeAPI nos bloquease a todos, y además consumen tiempo y conexiones.
 - **Exportaciones (10/minuto):** generar un PDF con imágenes consume CPU. Es la operación más cara para nuestro servidor.
 - **Resto (100/minuto):** son consultas baratas a nuestra base de datos. El límite es generoso para que una aplicación cliente funcione con fluidez, pero corta los bucles descontrolados.
 
 **¿Cómo protege esto la API?**
-- **Contra la fuerza bruta** de contraseñas en el login, junto con el bloqueo de cuenta.
+- **Contra la fuerza bruta** de contraseñas en el login, junto con el bloqueo por intentos fallidos.
 - **Contra la denegación de servicio** por agotamiento de recursos (OWASP API4, *Unrestricted Resource Consumption*). Ningún cliente puede acaparar la CPU, la base de datos o las conexiones a PokeAPI.
 - **Contra el abuso del servicio externo:** el límite, junto con la caché y el *circuit breaker* del cliente de PokeAPI, nos mantiene muy por debajo de lo que PokeAPI tolera.
 - **Con equidad entre usuarios:** en los endpoints autenticados el límite es **por usuario y no por IP**. Varios estudiantes detrás de la misma red no se quitan el cupo entre ellos, y un usuario no puede saltarse su límite cambiando de IP. En los públicos, donde aún no se sabe quién es, se limita por IP.
@@ -709,7 +709,7 @@ Resumen de las decisiones. El detalle, con el **OWASP API Security Top 10 (2023)
 | Contraseña de 72 bytes como máximo | bcrypt ignora en silencio lo que pasa de 72 bytes; se rechaza en lugar de truncarla. |
 | Política: 8+ caracteres, mayúscula, número y sin el nombre de usuario | Requisito del enunciado, más una regla barata contra contraseñas obvias. |
 | Mismo mensaje y mismo tiempo para "usuario inexistente" y "contraseña incorrecta" | Evita descubrir qué usuarios existen. Si el usuario no existe, se verifica igualmente contra un hash ficticio. |
-| **Bloqueo temporal** tras 5 fallos seguidos (`429` + `Retry-After`) | Límite de reintentos por cuenta: frena la fuerza bruta aunque el atacante cambie de IP. |
+| **Bloqueo temporal** tras 5 fallos seguidos (`429` + `Retry-After`) | Límite de reintentos por **usuario e IP**, guardado en la base de datos (`LoginThrottle`). Por cuenta, cualquiera podría dejar sin acceso al dueño con cinco contraseñas falsas; así, quien falla solo se bloquea a sí mismo. Funciona igual si el usuario no existe, para no revelar qué cuentas hay. |
 | JWT con `sub`, `user_id`, `exp`, `iat`, `nbf`, `iss`, `aud`, `jti` y `type` | Validación según RFC 8725: algoritmo fijado al decodificar (rechaza `alg: none` y la confusión de algoritmo), emisor y audiencia comprobados. |
 | Access token de 24 h + refresh token de 7 días **con rotación** | Cada refresh token sirve una vez. Si se reutiliza uno, se interpreta como robo y se revoca toda la sesión. |
 | El usuario se vuelve a comprobar en la base de datos en cada petición | Un token de un usuario borrado o desactivado deja de valer al momento. |
@@ -799,7 +799,7 @@ El servidor web no se anuncia: uvicorn se arranca con `--no-server-header` y, po
   - HTTP se usa únicamente para redirigir con un `308`, que conserva el método y el cuerpo, a diferencia de un `301`.
   - La redirección solo va a hosts de `ALLOWED_HOSTS`. Con cualquier otro responde `400`, para no convertirse en una redirección abierta.
   - HSTS solo se envía por HTTPS.
-- **La IP real, sin poder falsificarla.** El rate limiting y el bloqueo de cuenta dependen de la IP del cliente.
+- **La IP real, sin poder falsificarla.** El rate limiting y el bloqueo por intentos fallidos dependen de la IP del cliente.
   - Con Docker, la API solo acepta `X-Forwarded-For` de la IP fija de Caddy (`FORWARDED_ALLOW_IPS`). Caddy, a su vez, sustituye la cabecera que envía el cliente en lugar de añadirse a ella.
   - Sin proxy, `python -m app` no la acepta de nadie.
 - **Sin pistas del servidor.** Ni la API ni Caddy envían `Server` o `Via`. La API de administración de Caddy está desactivada.

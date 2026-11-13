@@ -16,6 +16,7 @@ from sqlmodel import Session, col, select
 from app import rate_limit as rl
 from app.dependencies import CurrentUser, PokeAPIDep, SessionDep
 from app.models import (
+    MAX_DB_ID,
     Battle,
     BattleAction,
     BattleCreate,
@@ -48,7 +49,7 @@ logger = logging.getLogger("pokedex_api.battles")
 
 router = APIRouter(tags=["Combates"])
 
-BattleId = Annotated[int, Path(ge=1, description="ID del combate.")]
+BattleId = Annotated[int, Path(ge=1, le=MAX_DB_ID, description="ID del combate.")]
 NOT_FOUND = "Combate no encontrado."
 YOU, RIVAL = 0, 1
 
@@ -364,7 +365,7 @@ def list_progress(
 async def evolve(
     request: Request,
     response: Response,
-    entry_id: Annotated[int, Path(ge=1)],
+    entry_id: Annotated[int, Path(ge=1, le=MAX_DB_ID)],
     user: CurrentUser,
     session: SessionDep,
     pokeapi: PokeAPIDep,
