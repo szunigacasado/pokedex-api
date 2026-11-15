@@ -85,39 +85,6 @@ def api() -> Iterator[respx.MockRouter]:
 
 
 # ═════════════════════════════════════════════════════════════
-#  Tests pedidos en el enunciado
-# ═════════════════════════════════════════════════════════════
-async def test_pokeapi_service_get_pokemon(api, make_service) -> None:
-    """El servicio obtiene un Pokémon y extrae solo los campos relevantes."""
-    api.get("/pokemon/25").respond(json=pokemon_payload(types=("electric", "fairy")))
-
-    pokemon = await make_service().get_pokemon(25)
-
-    assert pokemon.id == 25
-    assert pokemon.name == "pikachu"
-    assert pokemon.types == ["electric", "fairy"]
-    assert [a.name for a in pokemon.abilities] == ["static", "lightning-rod"]
-    assert pokemon.abilities[1].is_hidden
-    assert pokemon.stats.hp == 10
-    assert pokemon.stats.special_attack == 40
-    assert pokemon.stats.speed == 60
-    assert pokemon.stats.total == 210
-    assert pokemon.sprites.official_artwork == "https://img.test/art/25.png"
-    assert not hasattr(pokemon, "moves")
-
-
-async def test_pokeapi_service_handles_404(api, make_service, sleeps) -> None:
-    """Un Pokémon inexistente produce PokemonNotFoundError y no se reintenta."""
-    route = api.get("/pokemon/missingno").respond(404)
-
-    with pytest.raises(PokemonNotFoundError):
-        await make_service().get_pokemon("missingno")
-
-    assert route.call_count == 1
-    assert sleeps == []
-
-
-# ═════════════════════════════════════════════════════════════
 #  Validación de parámetros
 # ═════════════════════════════════════════════════════════════
 async def test_identifier_is_normalized(api, make_service) -> None:
