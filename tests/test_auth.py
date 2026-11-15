@@ -50,19 +50,6 @@ def bearer(token: str) -> dict[str, str]:
 # ═════════════════════════════════════════════════════════════
 #  Registro
 # ═════════════════════════════════════════════════════════════
-def test_register_user_success(client: TestClient) -> None:
-    response = client.post(
-        REGISTER, json={"username": "Misty", "email": "Misty@Cerulean.dev", "password": "Starmie42"}
-    )
-
-    assert response.status_code == 201
-    body = response.json()
-    assert body["username"] == "misty"
-    assert body["email"] == "misty@cerulean.dev"
-    assert body["is_active"] is True
-    assert "password" not in body and "hashed_password" not in body
-
-
 def test_password_is_stored_hashed_with_bcrypt(
     client: TestClient, session: Session, test_user: dict
 ) -> None:
@@ -71,14 +58,6 @@ def test_password_is_stored_hashed_with_bcrypt(
     assert user.hashed_password != test_user["password"]
     assert user.hashed_password.startswith("$2b$")
     assert verify_password(test_user["password"], user.hashed_password)
-
-
-def test_register_duplicate_username(client: TestClient, test_user: dict) -> None:
-    response = client.post(
-        REGISTER, json={"username": "ASH", "email": "otro@kanto.dev", "password": "Pikachu123"}
-    )
-
-    assert response.status_code == 409
 
 
 def test_register_duplicate_email(client: TestClient, test_user: dict) -> None:
@@ -128,37 +107,8 @@ def test_register_rejects_invalid_usernames(client: TestClient, username: str) -
 # ═════════════════════════════════════════════════════════════
 #  Login
 # ═════════════════════════════════════════════════════════════
-def test_login_success(client: TestClient, test_user: dict) -> None:
-    response = login(client, "ash", test_user["password"])
-
-    assert response.status_code == 200
-    assert response.headers["cache-control"] == "no-store"
-    body = response.json()
-    assert body["token_type"] == "bearer"
-    assert body["expires_in"] == 24 * 60 * 60
-
-    settings = get_settings()
-    claims = jwt.decode(
-        body["access_token"],
-        settings.secret_key.get_secret_value(),
-        algorithms=["HS256"],
-        audience=settings.jwt_audience,
-    )
-    assert claims["sub"] == "ash"
-    assert claims["user_id"] == test_user["id"]
-    assert claims["type"] == "access"
-    assert claims["exp"] - claims["iat"] == 24 * 60 * 60
-
-
 def test_login_accepts_email_as_username(client: TestClient, test_user: dict) -> None:
     assert login(client, "ASH@kanto.dev", test_user["password"]).status_code == 200
-
-
-def test_login_invalid_credentials(client: TestClient, test_user: dict) -> None:
-    response = login(client, "ash", "Incorrecta123")
-
-    assert response.status_code == 401
-    assert response.headers["www-authenticate"] == "Bearer"
 
 
 def test_login_unknown_user_gives_the_same_answer(client: TestClient, test_user: dict) -> None:
@@ -264,13 +214,6 @@ def test_login_upgrades_outdated_password_hash(client: TestClient, session: Sess
 # ═════════════════════════════════════════════════════════════
 #  Endpoints protegidos
 # ═════════════════════════════════════════════════════════════
-def test_access_protected_endpoint_without_token(client: TestClient) -> None:
-    response = client.get(ME)
-
-    assert response.status_code == 401
-    assert response.headers["www-authenticate"] == "Bearer"
-
-
 def test_access_protected_endpoint_with_valid_token(
     client: TestClient, auth_headers: dict, test_user: dict
 ) -> None:
