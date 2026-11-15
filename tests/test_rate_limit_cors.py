@@ -17,24 +17,6 @@ KEY = "k" * 32
 # ═════════════════════════════════════════════════════════════
 #  Rate limiting
 # ═════════════════════════════════════════════════════════════
-def test_rate_limit_exceeded(client: TestClient) -> None:
-    """Test del enunciado: la 11.ª petición de login en un minuto devuelve 429.
-
-    Cada intento usa un usuario distinto para que el 429 sea del rate limit por IP y no
-    del bloqueo por intentos fallidos (que cuenta por usuario e IP).
-    """
-    for i in range(10):
-        response = client.post(LOGIN, data={"username": f"nadie{i}", "password": "Mal12345"})
-        assert response.status_code == 401
-
-    response = client.post(LOGIN, data={"username": "nadie10", "password": "Mal12345"})
-
-    assert response.status_code == 429
-    assert response.json()["limit"] == "10 per 1 minute"
-    assert int(response.headers["retry-after"]) > 0
-    assert response.headers["x-ratelimit-remaining"] == "0"
-
-
 def test_registration_is_limited_per_hour(client: TestClient) -> None:
     for i in range(5):
         body = {"username": f"user{i}", "email": f"u{i}@kanto.dev", "password": "Pikachu123"}

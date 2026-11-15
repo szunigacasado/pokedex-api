@@ -18,7 +18,7 @@ Además de lo que pide el enunciado:
 - **Inicio de sesión con Google** (OpenID Connect con PKCE).
 - **API v2** con evoluciones y paginación por cursor, y retirada ordenada de la v1.
 - **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
-- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 664 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
+- **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 665 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
 
 ## Equipo
 
@@ -64,7 +64,7 @@ pokedex-api/
 │   └── assets/ · static/   # Fuente de las fichas y JavaScript de /docs
 ├── scripts/                # Prueba de humo, datos de demostración y datos de respaldo
 ├── deploy/Caddyfile        # Proxy inverso HTTPS (Docker)
-├── tests/                  # Un fichero por módulo (más conftest.py y fakes.py) y tests/web
+├── tests/                  # test_api.py (los del enunciado), un fichero por módulo y tests/web
 ├── .github/                # CI y Dependabot
 ├── .vscode/                # Arrancar, depurar y lanzar los tests desde VS Code
 ├── render.yaml             # Despliegue: solo main y solo con la CI en verde
@@ -197,6 +197,8 @@ Qué hace cada opción:
 ```bash
 uv run pytest --cov=app --cov-report=term-missing
 ```
+
+Los tests que pide el enunciado (apartado 3.1), con sus nombres exactos, están juntos en [`tests/test_api.py`](tests/test_api.py); se pueden lanzar solos con `uv run pytest tests/test_api.py`. El resto de ficheros prueba cada módulo en detalle.
 
 Cada test usa una base de datos SQLite en memoria creada desde cero, así que no deja ficheros ni toca datos reales. En la CI, la suite entera se pasa además contra un PostgreSQL de verdad (`TEST_DATABASE_URL`).
 
