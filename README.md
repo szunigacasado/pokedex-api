@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/szunigacasado/pokedex-api/actions/workflows/ci.yml/badge.svg)
 
-Práctica 1 del Módulo 2 (APIs REST y fundamentos de integración) de **Ingenieria en Industria Conectada**, Universidad Francisco de Vitoria.
+Práctica 1 del Módulo 2 (APIs REST y fundamentos de integración) · **Ingeniería en Industria Conectada**, Universidad Francisco de Vitoria.
 
 ## Descripción
 
