@@ -20,6 +20,25 @@ Además de lo que pide el enunciado:
 - **HTTPS en el puerto 443:** sin Docker con `uv run python -m app`, o con Docker y Caddy.
 - **Seguridad documentada** frente al OWASP API Security Top 10 en [`SECURITY.md`](SECURITY.md), con 665 tests de Python (97 % de cobertura, también contra PostgreSQL) y 41 de JavaScript.
 
+### Capturas de la interfaz
+
+> Capturas añadidas el 23 de noviembre de 2026, después de la entrega, porque el profesor lo pidió en la primera defensa. El código de la aplicación no ha cambiado.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/img/interfaz/acceso.png" alt="Pantalla de acceso con usuario y contraseña o con Google" width="400"><br><sub>Acceso con usuario y contraseña o con Google</sub></td>
+    <td align="center"><img src="docs/img/interfaz/mi-pokedex.png" alt="Colección del entrenador con filtros y progreso de Kanto" width="400"><br><sub>Mi Pokédex: colección, filtros y progreso</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/img/interfaz/analisis-equipo.png" alt="Análisis del equipo con gráfico radar y cobertura de tipos" width="400"><br><sub>Análisis del equipo: estadísticas y cobertura de tipos</sub></td>
+    <td align="center"><img src="docs/img/interfaz/combate.png" alt="Combate por turnos contra la máquina" width="400"><br><sub>Combate por turnos</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/img/interfaz/profesor-oak.png" alt="El Profesor Oak propone cambios que suben la nota del equipo" width="400"><br><sub>Profesor Oak: propuestas que hay que confirmar</sub></td>
+    <td align="center"><img src="docs/img/interfaz/modo-tecnico.png" alt="Modo técnico con cada petición REST, su código y su tiempo" width="400"><br><sub>Modo técnico: cada petición REST en directo</sub></td>
+  </tr>
+</table>
+
 ## Equipo
 
 Práctica **individual**, autorizada por el profesor.
