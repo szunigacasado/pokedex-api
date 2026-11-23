@@ -1,6 +1,6 @@
 [project]
 name = "pokedex-api"
-version = "1.3.7"
+version = "1.3.8"
 description = "API REST de Pokédex personal: cliente de PokeAPI y servidor FastAPI con autenticación JWT."
 readme = "README.md"
 requires-python = ">=3.12"
